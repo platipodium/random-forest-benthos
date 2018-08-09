@@ -1,0 +1,60 @@
+---
+title: "Prädiktives Mytilus Modell aus Random Forests"
+author: "Charlotte Schramm und Carsten Lemmen"
+copyright: "Helmholtz-Zentrum Geesthacht, 2018"
+license: "This report is released  under the CC-by-SA 4.0 license."
+date: "Aug 9, 2018"
+output: html_document
+---
+
+Dieses Dokument ist in **Markdown** verfasst, siehe http://markdown.de für eine kurze Einführung.  Dieses Verzeichnis steht unter https://git-scm.com Versionskontrolle. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Der Mytilus-Datensatz enthält ungefähr 30000 Positionen von positivem Vorkommen der Miesmuschel.  Diese werden aus einer CSV ("character-separated-value") Datei gelesen und in einen Dateframe gepackt.
+
+```{r}
+mytilus_alldata <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".")
+mytilus <- data.frame(mytilus_alldata$Lon,mytilus_alldata$Lat,mytilus_alldata$PA)
+```
+
+Die Daten müssten jetzt auf Irregularitäten und Duplikate überprüft werden, dass lassen wir erst mal weg.
+
+```{r}
+# Daten reinigen und Duplikate entfernen
+```
+
+Die Sedimentdaten sind in zwei Versionen vorhanden, einmal in der Datei `
+Predictor.rda` und in einer weiteren Datei `interpolated_d50_NorthSea_1nm.txt`. Hier der Versuch mit der ersten (später besser die zweite nehmen, da diese ordentlich referenziert werden kann, sie stammt aus dem [NOAH Habitatatlas](www.noah-project.de)   
+
+```{r}
+load("Predictor.rda")
+library(RColorBrewer)
+library(sp)
+spplot(Predictor,"mgs",formula=-log2(mgs/1000)~s1+s2,
+      col.regions = brewer.pal(11, "Spectral"),
+      at=c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
+      pretty=TRUE
+      ) #Krumbein phi scale
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+plot(mytilus$mytilus_alldata.Lon,mytilus$mytilus_alldata.Lat,cex=0.1)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
