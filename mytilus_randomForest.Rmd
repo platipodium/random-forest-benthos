@@ -7,7 +7,7 @@ date: "Aug 9, 2018"
 output: html_document
 ---
 
-Dieses Dokument ist in **Markdown** verfasst, siehe http://markdown.de für eine kurze Einführung.  Dieses Verzeichnis steht unter https://git-scm.com Versionskontrolle. 
+Dieses Dokument ist in **Markdown** verfasst, siehe http://markdown.de für eine kurze Einführung.  Dieses Verzeichnis steht unter https://git-scm.com Versionskontrolle. Es ist online gehostet unter https://github.com/platipodium/random-forest-benthos. Bitte den `Knit`-Button in RStudio drücken, um eine nett formatiertes Dokument zu erhalten.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -18,6 +18,7 @@ Der Mytilus-Datensatz enthält ungefähr 30000 Positionen von positivem Vorkomme
 ```{r}
 mytilus_alldata <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".")
 mytilus <- data.frame(mytilus_alldata$Lon,mytilus_alldata$Lat,mytilus_alldata$PA)
+summary(mytilus)
 ```
 
 Die Daten müssten jetzt auf Irregularitäten und Duplikate überprüft werden, dass lassen wir erst mal weg.
@@ -26,8 +27,25 @@ Die Daten müssten jetzt auf Irregularitäten und Duplikate überprüft werden, 
 # Daten reinigen und Duplikate entfernen
 ```
 
+Die gereinigten Daten sind wie folgt geografisch verteilt:
+
+```{r}
+plot(mytilus$mytilus_alldata.Lon,mytilus$mytilus_alldata.Lat,cex=0.1)
+```
+
+Wir benutzen den Dataframe jetzt als spatial data und reichern es mit
+Information zu Koordinaten und Referenzsystem aus dem `sp`-Paket an:
+
+```{r}
+library(sp)
+coordinates(mytilus) <- ~mytilus_alldata.Lon + mytilus_alldata.Lat
+proj4string(mytilus)<-CRS("+init=epsg:4326")
+spplot(mytilus,"mytilus_alldata.PA",cex=0.1)
+```
+
+
 Die Sedimentdaten sind in zwei Versionen vorhanden, einmal in der Datei `
-Predictor.rda` und in einer weiteren Datei `interpolated_d50_NorthSea_1nm.txt`. Hier der Versuch mit der ersten (später besser die zweite nehmen, da diese ordentlich referenziert werden kann, sie stammt aus dem [NOAH Habitatatlas](www.noah-project.de)   
+Predictor.rda` und in einer weiteren Datei `interpolated_d50_NorthSea_1nm.txt`. Hier der Versuch mit der ersten (später besser die zweite nehmen, da diese ordentlich referenziert werden kann, denn die stammt aus dem [NOAH Habitatatlas](www.noah-project.de)   
 
 ```{r}
 load("Predictor.rda")
@@ -38,23 +56,18 @@ spplot(Predictor,"mgs",formula=-log2(mgs/1000)~s1+s2,
       at=c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
       pretty=TRUE
       ) #Krumbein phi scale
+
+library(grid)
+grid.text("log2(mgs)",x=unit(0.95,"npc"),y=unit(0.50,"npc"),rot=-90)
 ```
-
-
-## Including Plots
-
-You can also embed plots, for example:
+Die entscheinden Schritte, um die Umweltdaten mit den Muscheldaten zusammenzubringen, sind anscheinend die folgenden zwei Zeilen aus
+Kaela's Originalskript.  Wir müssen noch herausfinden, was da genau
+passiert und aus welchem Paket die Befehle stammen
 
 ```{r}
-plot(mytilus$mytilus_alldata.Lon,mytilus$mytilus_alldata.Lat,cex=0.1)
+#med.env<-get.environ(points=med4,env=stack(Predictor))
+#clip the points to SNS
+#med.env2<-med.env[!is.na(med.env$depthg14),]
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
-
-
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
