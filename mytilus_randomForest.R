@@ -4,9 +4,7 @@
 #Pakete installieren
   #install.packages("randomForest")
   #library(randomForest)
-install.packages("sp")
 library(sp)
-install.packages("geoR")
 library(geoR)
 install.packages("dplyr")
 library(dplyr)
@@ -32,8 +30,7 @@ mytilus <- data.frame(mytilus_alldata$Lon,mytilus_alldata$Lat,mytilus_alldata$PA
 #load("Predictor.rda")
 
 #plotten
-  #plot(gra_size$V1,gra_size$V2,cex=0.01)
-plot(mytilus$mytilus_alldata.Lon,mytilus$mytilus_alldata.Lat,cex=0.1)
+spplot(mytilus,"mytilus_alldata.PA",cex=0.1,col.regions="black")
 
 
 spplot(Predictor,"mgs",formula=log2(mgs)~s1+s2)
