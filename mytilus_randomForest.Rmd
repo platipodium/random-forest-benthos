@@ -58,11 +58,16 @@ spplot(Predictor,"mgs",formula=-log2(mgs/1000)~s1+s2,
       ) #Krumbein phi scale
 
 library(grid)
-grid.text("log2(mgs)",x=unit(0.95,"npc"),y=unit(0.50,"npc"),rot=-90)
+grid.text("-log2(mgs/1mm)",x=unit(0.95,"npc"),y=unit(0.50,"npc"),rot=-90)
 ```
-Die entscheinden Schritte, um die Umweltdaten mit den Muscheldaten zusammenzubringen, sind anscheinend die folgenden zwei Zeilen aus
-Kaela's Originalskript.  Wir müssen noch herausfinden, was da genau
-passiert und aus welchem Paket die Befehle stammen
+Die entscheinden Schritte, um die Umweltdaten mit den Muscheldaten zusammenzubringen, benötigen das Paket `crecs` von `github`.  Dieses muss mithilfe der `devtools` installiert werden.
+
+``` r
+library(devtools)
+devtools::install_github("janhoo/crecs")
+library(crecs)
+```
+Aus diesem Paket kann der Befehl `get.environ` zu gegebenen Punktdaten (`points`) einen Vektor mit Daten aus der Umgebung (`env`) erzeugen.
 
 ```{r}
 #med.env<-get.environ(points=med4,env=stack(Predictor))
