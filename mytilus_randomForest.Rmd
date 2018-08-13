@@ -15,10 +15,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Mytilus (Miesmuschel) Punktdaten
 
-Der Mytilus-Datensatz enthält ungefähr 30000 Positionen von positivem Vorkommen der Miesmuschel.  Diese werden aus einer `CSV` ("character-separated-value")-Datei gelesen. 
+Der Mytilus-Datensatz enthält ungefähr 30000 Positionen von positivem Vorkommen der Miesmuschel.  Diese werden aus einer `CSV` ("character-separated-value")-Datei gelesen. Offenbar kann man in diesem Fall nicht die Funktion read.table anwenden, da dadurch etwa 2800 Zeilen nicht eingelesen werden. Stattdessen kann die Funktion read.csv angewendet werden.
 
 ```{r}
-mytilus <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".")
+#mytilus <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".")
+mytilus <- read.csv("Mytilus_SNS4_AP.csv",sep=";")
 summary(mytilus)
 ```
 
@@ -31,7 +32,7 @@ mytilus.valid = subset(mytilus,
   grepl("Mytilus", mytilus$Species) &
   grepl("Presence", mytilus$PA))
 mytilus.duplicates = duplicated(mytilus.valid[, c("Lat","Lon")]) 
-mytilus.deduplicated <- subset(cbind(mytilus.valid,mytilus.duplicates), mytilus.duplicates=FALSE)
+mytilus.deduplicated <- subset(cbind(mytilus.valid,mytilus.duplicates), mytilus.duplicates==FALSE)
 mytilus.cleaned=mytilus.deduplicated[c("Lon","Lat","PA","Source")]
 summary(mytilus.cleaned)
 ```
@@ -82,11 +83,11 @@ myt.env<-get.environ(points=myt,env=stack(Predictor))
 
 # Korngröße (Teil 2)
 
-Die zweiten Sedimentdaten aus `interpolated_d50_NorthSea_1nm.txt` liegen schon als phi-Werte vor.  Diese können ordentlich referenziert werden, denn sie stamme  aus dem [NOAH Habitatatlas](www.noah-project.de).
+Die zweiten Sedimentdaten aus `interpolated_d50_NorthSea_1nm.txt` liegen schon als phi-Werte vor.  Diese können ordentlich referenziert werden, denn sie stammen  aus dem [NOAH Habitatatlas](www.noah-project.de).
 
 ```{r}
 sed <- read.table("interpolated_d50_NorthSea_1nm.txt",header=T,dec=".")
-#sed <- data.frame(sed$lon, sed$lat, sed$val)
+sed <- sed[,1:3]
 summary(sed)
 sed2 <- sed
 coordinates(sed2) <- ~lon + lat
@@ -94,7 +95,7 @@ proj4string(sed2)<-CRS("+init=epsg:4326")
 spplot(sed2,"val", cex=0.1)
 ```
 
-Die Daten sind klassifizierte Punkdaten, die in eine kontinuierliches Raster umgewandelt werden sollen.  
+Die Daten sind klassifizierte Punkdaten, die in ein kontinuierliches Raster umgewandelt werden sollen. Die angegebene Wert für tolerance ist der von R vorgeschlagene Wert. Die Angabe des Wertes ist nötig, da die Daten nicht komplett gegridded sind. 
 
 
 ```{r}
@@ -102,8 +103,40 @@ sed.pixel=SpatialPixelsDataFrame(sed2,data=sed,tolerance=0.000100658)
 spplot(sed.pixel,"val", cex=0.1)
 ```
 
+Die Mytilus- und die Korngrößen-Daten werden nun zusammengeführt und auf den gemeinsamen Bereich zugeschnitten. Damit reduziert sich die Anzahl der Punkte auf 631.
 
 ```{r}
 library(crecs)
 myt.env<-get.environ(points=myt,env=stack(sed.pixel))
+myt.env <- myt.env[!is.na(myt.env$val),]
+summary(myt.env)
+```
+
+Es sollen nun 631 Hintergrundwerte, an denen die Miesmuschel nicht vorkommt, zufällig generiert werden (random-absence). Dies geschieht mit der Funktion randomPoints, die eine Matrix mit x und y Werten erzeugt
+
+```{r}
+library(dismo)
+random.absence <- randomPoints(sed.pixel,n=631,myt)
+```
+
+Die Matrix soll in einen SpatialPoints Datensatz umgewandelt werden und bekommt damit einen räumlichen Bezug. Anschließend werden die Absence-Punktdaten mit den Korngrößen-Daten vereint.
+
+```{r}
+random.absence <- as.data.frame(random.absence)
+coordinates(random.absence) <- ~ x+y
+proj4string(random.absence) <- CRS("+init=epsg:4326")
+
+sed.absence <- get.environ(random.absence,stack(sed.pixel))
+```
+
+Die Presence-Punktdaten und die generierten Absence-Punktdaten werden jetzt mit einander verbunden.
+
+```{r}
+myt.env$PA2 <- 1
+sed.absence$PA2 <- 0
+library(maptools)
+```
+
+```{r}
+
 ```
