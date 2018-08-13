@@ -7,45 +7,50 @@ date: "Aug 9, 2018"
 output: html_document
 ---
 
-Dieses Dokument ist in **Markdown** verfasst, siehe http://markdown.de für eine kurze Einführung.  Dieses Verzeichnis steht unter https://git-scm.com Versionskontrolle. Es ist online gehostet unter https://github.com/platipodium/random-forest-benthos. Bitte den `Knit`-Button in RStudio drücken, um eine nett formatiertes Dokument zu erhalten.
+> Dieses Dokument ist in **Markdown** verfasst, siehe http://markdown.de für eine kurze Einführung.  Dieses Verzeichnis steht unter https://git-scm.com Versionskontrolle. Es ist online gehostet unter https://github.com/platipodium/random-forest-benthos. Bitte den `Knit`-Button in RStudio drücken, um eine nett formatiertes Dokument zu erhalten.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Der Mytilus-Datensatz enthält ungefähr 30000 Positionen von positivem Vorkommen der Miesmuschel.  Diese werden aus einer CSV ("character-separated-value") Datei gelesen und in einen Dateframe gepackt.
+# Mytilus (Miesmuschel) Punktdaten
+
+Der Mytilus-Datensatz enthält ungefähr 30000 Positionen von positivem Vorkommen der Miesmuschel.  Diese werden aus einer `CSV` ("character-separated-value")-Datei gelesen. 
 
 ```{r}
-mytilus_alldata <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".")
-mytilus <- data.frame(mytilus_alldata$Lon,mytilus_alldata$Lat,mytilus_alldata$PA)
+mytilus <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".")
 summary(mytilus)
 ```
 
-Die Daten müssten jetzt auf Irregularitäten und Duplikate überprüft werden, dass lassen wir erst mal weg.
+Die Daten müssen noch gereinigt werden, d.h.  auf fehlerhafte Koordinaten, Duplikate und nicht-Mytilus Angaben überprüft werden. Außerdem behalten wir nur die Presence-Werte. 
 
 ```{r}
-# Daten reinigen und Duplikate entfernen
-```
-
-Die gereinigten Daten sind wie folgt geografisch verteilt:
-
-```{r}
-plot(mytilus$mytilus_alldata.Lon,mytilus$mytilus_alldata.Lat,cex=0.1)
+mytilus.valid = subset(mytilus, 
+  !is.na(mytilus$Lat) & 
+  !is.na(mytilus$Lon) &
+  grepl("Mytilus", mytilus$Species) &
+  grepl("Presence", mytilus$PA))
+mytilus.duplicates = duplicated(mytilus.valid[, c("Lat","Lon")]) 
+mytilus.deduplicated <- subset(cbind(mytilus.valid,mytilus.duplicates), mytilus.duplicates=FALSE)
+mytilus.cleaned=mytilus.deduplicated[c("Lon","Lat","PA","Source")]
+summary(mytilus.cleaned)
 ```
 
 Wir benutzen den Dataframe jetzt als spatial data und reichern es mit
 Information zu Koordinaten und Referenzsystem aus dem `sp`-Paket an:
 
 ```{r}
+myt <- data.frame(mytilus.cleaned$Lon, mytilus.cleaned$Lat, mytilus.cleaned$PA)
 library(sp)
-coordinates(mytilus) <- ~mytilus_alldata.Lon + mytilus_alldata.Lat
-proj4string(mytilus)<-CRS("+init=epsg:4326")
-spplot(mytilus,"mytilus_alldata.PA",cex=0.1)
+coordinates(myt) <- ~mytilus.cleaned.Lon + mytilus.cleaned.Lat
+proj4string(myt)<-CRS("+init=epsg:4326")
+plot(myt,cex=0.1)
 ```
 
+# Korngröße (Teil 1)
 
 Die Sedimentdaten sind in zwei Versionen vorhanden, einmal in der Datei `
-Predictor.rda` und in einer weiteren Datei `interpolated_d50_NorthSea_1nm.txt`. Hier der Versuch mit der ersten (später besser die zweite nehmen, da diese ordentlich referenziert werden kann, denn die stammt aus dem [NOAH Habitatatlas](www.noah-project.de)   
+Predictor.rda` und in einer weiteren Datei `interpolated_d50_NorthSea_1nm.txt`. Hier der Versuch mit der ersten (später besser die zweite nehmen, s.u.).  Die Rohdaten sind Mittlere Korngröße ("median grain size", msg), und werden in der Krumbein-Phi-Skala dargestellt, d.h. den negativen binären Logarithmus der auf 1 mm normierten Korngröße. 
 
 ```{r}
 load("Predictor.rda")
@@ -55,19 +60,38 @@ spplot(Predictor,"mgs",formula=-log2(mgs/1000)~s1+s2,
       col.regions = brewer.pal(11, "Spectral"),
       at=c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
       pretty=TRUE
-      ) #Krumbein phi scale
-
+      ) 
 library(grid)
-grid.text("log2(mgs)",x=unit(0.95,"npc"),y=unit(0.50,"npc"),rot=-90)
+grid.text("-log2(mgs/1mm)",x=unit(0.95,"npc"),y=unit(0.50,"npc"),rot=-90)
 ```
-Die entscheinden Schritte, um die Umweltdaten mit den Muscheldaten zusammenzubringen, sind anscheinend die folgenden zwei Zeilen aus
-Kaela's Originalskript.  Wir müssen noch herausfinden, was da genau
-passiert und aus welchem Paket die Befehle stammen
+
+Die entscheinden Schritte, um die Umweltdaten mit den Muscheldaten zusammenzubringen, benötigen das Paket `crecs` von `github`.  Dieses muss mithilfe der `devtools` installiert werden.
 
 ```{r}
-#med.env<-get.environ(points=med4,env=stack(Predictor))
+library(devtools)
+devtools::install_github("janhoo/crecs")
+library(crecs)
+```
+Aus diesem Paket kann der Befehl `get.environ` zu gegebenen Punktdaten (`points`) einen Vektor mit Daten aus der Umgebung (`env`) erzeugen.
+
+```{r}
+myt.env<-get.environ(points=myt,env=stack(Predictor))
 #clip the points to SNS
 #med.env2<-med.env[!is.na(med.env$depthg14),]
 ```
 
+# Korngröße (Teil 2)
 
+Die zweiten Sedimentdaten aus `interpolated_d50_NorthSea_1nm.txt` liegen schon als phi-Werte vor.  Diese können ordentlich referenziert werden, denn sie stamme  aus dem [NOAH Habitatatlas](www.noah-project.de).
+
+```{r}
+sed <- read.table("interpolated_d50_NorthSea_1nm.txt",header=T,dec=".")
+sed <- data.frame(sed$lon, sed$lat, sed$val)
+summary(sed)
+coordinates(sed) <- ~sed.lon + sed.lat
+proj4string(sed)<-CRS("+init=epsg:4326")
+spplot(sed,"sed.val", cex=0.1)
+```
+```{r}
+myt.env<-get.environ(points=myt,env=stack(sed))
+```
