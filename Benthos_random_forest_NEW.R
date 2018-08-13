@@ -4,25 +4,31 @@
 
 #Mytilusdaten aufbereiten:
   #Laden der CSV-Datei mit den Mytilus-Daten zum Vorkommen der Miesmuschel
-mytilus <- read.csv("Mytilus_SNS4_AP.csv", sep=";")
+mytilus <- read.csv("Mytilus_SNS4_AP.csv", sep=";") #diese Datei hat 37214 Zeilen??
+#mytilus_table <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".") #diese Datei hat 34368 Zeilen, es gehen Zeilen verloren
 summary(mytilus) #es gibt 32314 Presence-Daten aber nur 4900 Absence-Daten
 
   #Punkte ohne Koordinaten und die doppelt vorkommen entfernen
     #remove all points with no coordinates
-mytilus2 = subset(mytilus, !is.na(mytilus$Lat) & !is.na(mytilus$Lon))
+mytilus2 = subset(mytilus, !is.na(mytilus$Lat) & !is.na(mytilus$Lon) &
+                  grepl("Mytilus", mytilus$Species) & #nur Daten mit Mytilus behalten
+                  grepl("Presence", mytilus$PA)) #und nur Presence-Werte behalten
     #remove all duplicate points
 dups <- duplicated(mytilus2[, c("Lat","Lon")])
 mytilus3 <- cbind(mytilus2, dups)
-mytilus4 <- subset(mytilus3, dups=="FALSE")
+mytilus4 <- subset(mytilus3, dups=="FALSE") #muss FALSE in Anführungszeichen stehen?--> scheint hier
+      #keinen Unterschied zu machen
+    #nur Lon, Lat, PA und source-Spalten behalten
+mytilus.cleaned=mytilus4[c("Lon","Lat","PA","Source")]
 
   #Mytilus-Daten in SpatialPointsDataFrame überführen und Referenzsystem festlegen
     #make spatial points data frame
 library(sp)
-coordinates(mytilus4) <- ~Lon + Lat
-proj4string(mytilus4)<-CRS("+init=epsg:4326")
+coordinates(mytilus.cleaned) <- ~Lon + Lat
+proj4string(mytilus.cleaned)<-CRS("+init=epsg:4326")
 
   #Mytilus-Daten abbilden
-spplot(mytilus4,"PA",cex=0.01,col.regions=c("red","grey"))
+spplot(mytilus.cleaned,"PA",cex=0.01,col.regions=c("red","grey"))
 
 
 #Grainsize-Daten aufbereiten:
@@ -55,18 +61,17 @@ grid.text("phi",x=unit(0.85,"npc"),y=unit(0.5,"npc"),rot=-90)
 #Kombinieren der Muschel- und der Korngrößen-Daten
 devtools::install_github("janhoo/crecs")
 library(crecs)
-mgs_PA <- get.environ(mytilus4,stack(mgs_pixel)) #class SpatialPointsDataFrame
+mgs_PA <- get.environ(mytilus.cleaned,stack(mgs_pixel)) #class SpatialPointsDataFrame
 
   #Zuschneiden auf den Bereich der Korngrößen-Daten
 mgs_PA2 <- mgs_PA[!is.na(mgs_PA$val),]
-mgsPA2df <- data.frame(mgs_PA2)
 
   #Spalte anlegen, in der PA als 1 und 0 definiert ist --> als Faktor definieren
-absence <- which(mgs_PA2$PA=="Absence")
-presence <- which(mgs_PA2$PA=="Presence")
-mgs_PA2[presence,"PA2"] <- 1
-mgs_PA2[absence,"PA2"] <- 0
-mgs_PA2$PA2 <- as.factor(mgs_PA2$PA2)
+#absence <- which(mgs_PA2$PA=="Absence")
+#presence <- which(mgs_PA2$PA=="Presence")
+#mgs_PA2[presence,"PA2"] <- 1
+#mgs_PA2[absence,"PA2"] <- 0
+#mgs_PA2$PA2 <- as.factor(mgs_PA2$PA2)
 
   #Karten erzeugen
 PA2_plot <- spplot(mgs_PA2,"PA2",cex=0.05,col.regions=c("red","grey"))
@@ -75,11 +80,34 @@ library(gridExtra)
 grid.arrange(val_plot,PA2_plot,ncol=2)
 
 
+#Es müssen pseudo-absence Daten erzeugt werden
+set.seed(1)
+library(dismo)
+random.absence <- randomPoints(mgs_pixel,n=631,mytilus.cleaned)
+  #Umwandlung in einen Dataframe und Zuweisung der Koordinaten und eines 
+    #Koordinaten-Refererenz Systems --> class=SpatialPoints
+random.absence <- as.data.frame(random.absence)
+coordinates(random.absence) <- ~ x+y
+proj4string(random.absence) <- CRS("+init=epsg:4326")
+  #Zusammenbringen der Absence-Punkte mit dem Korngrößen-Datensatz
+mgs.absence <- get.environ(random.absence,stack(mgs_pixel))
+
+#Kombinieren von Presence und Absence Punkten und schreiben als 1 für presence und 2 für
+  #absence --> Umwandlung in Faktoren
+mgs_PA2$PA2 <- 1
+mgs.absence$PA2 <- 0
+library(maptools)
+mgsPA.bind <- spRbind(mgs_PA2[,3:ncol(mgs_PA2)],mgs.absence)
+mgsPA.bind$PA2 <- factor(mgsPA.bind$PA2)
+  #Abbilden von presence und absence Punkten
+spplot(mgsPA.bind,"PA2",cex=0.01,col.regions=c("black","red"))
+
+
 #Random Forest Modell anwenden
-mgsPA2_df <- data.frame(mgs_PA2)
+mgsPA2df <- data.frame(mgsPA.bind)
 library(randomForest)
-rf <- randomForest(PA2~val,data=mgsPA2_df)
-mgs_PA2$Prediction <- rf$predicted
+rf <- randomForest(PA2~val,data=mgsPA2df)
+mgsPA.bind$Prediction <- rf$predicted
 library(dismo)
 mgs_pixel$prediction <- predict(rf,mgs_pixel)
 
