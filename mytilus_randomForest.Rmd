@@ -86,12 +86,24 @@ Die zweiten Sedimentdaten aus `interpolated_d50_NorthSea_1nm.txt` liegen schon a
 
 ```{r}
 sed <- read.table("interpolated_d50_NorthSea_1nm.txt",header=T,dec=".")
-sed <- data.frame(sed$lon, sed$lat, sed$val)
+#sed <- data.frame(sed$lon, sed$lat, sed$val)
 summary(sed)
-coordinates(sed) <- ~sed.lon + sed.lat
-proj4string(sed)<-CRS("+init=epsg:4326")
-spplot(sed,"sed.val", cex=0.1)
+sed2 <- sed
+coordinates(sed2) <- ~lon + lat
+proj4string(sed2)<-CRS("+init=epsg:4326")
+spplot(sed2,"val", cex=0.1)
 ```
+
+Die Daten sind klassifizierte Punkdaten, die in eine kontinuierliches Raster umgewandelt werden sollen.  
+
+
 ```{r}
-myt.env<-get.environ(points=myt,env=stack(sed))
+sed.pixel=SpatialPixelsDataFrame(sed2,data=sed,tolerance=0.000100658)
+spplot(sed.pixel,"val", cex=0.1)
+```
+
+
+```{r}
+library(crecs)
+myt.env<-get.environ(points=myt,env=stack(sed.pixel))
 ```
