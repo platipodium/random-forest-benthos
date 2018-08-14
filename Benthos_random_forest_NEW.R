@@ -4,14 +4,16 @@
 
 #Mytilusdaten aufbereiten:
   #Laden der CSV-Datei mit den Mytilus-Daten zum Vorkommen der Miesmuschel
-mytilus <- read.csv("Mytilus_SNS4_AP.csv", sep=";") #diese Datei hat 37214 Zeilen??
+mytilus <- read.csv("Mytilus_SNS4_AP.csv", sep=";") #diese Datei hat 37214 Zeilen
 #mytilus_table <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".") #diese Datei hat 34368 Zeilen, es gehen Zeilen verloren
 summary(mytilus) #es gibt 32314 Presence-Daten aber nur 4900 Absence-Daten
 
   #Punkte ohne Koordinaten und die doppelt vorkommen entfernen
     #remove all points with no coordinates
 mytilus2 = subset(mytilus, !is.na(mytilus$Lat) & !is.na(mytilus$Lon) &
-                  grepl("Mytilus", mytilus$Species) & #nur Daten mit Mytilus behalten
+                  grepl("Mytilus", mytilus$Species)& 
+                  !grepl("Mytilus galloprovincialis",mytilus$Species)&
+                  !grepl("Mytilus edulis galloprovincialis",mytilus$Species)&#nur Daten mit Mytilus (edulis) behalten
                   grepl("Presence", mytilus$PA)) #und nur Presence-Werte behalten
     #remove all duplicate points
 dups <- duplicated(mytilus2[, c("Lat","Lon")])
@@ -20,6 +22,7 @@ mytilus4 <- subset(mytilus3, dups=="FALSE") #muss FALSE in Anführungszeichen st
       #keinen Unterschied zu machen
     #nur Lon, Lat, PA und source-Spalten behalten
 mytilus.cleaned=mytilus4[c("Lon","Lat","PA","Source")]
+summary(mytilus.cleaned)
 
   #Mytilus-Daten in SpatialPointsDataFrame überführen und Referenzsystem festlegen
     #make spatial points data frame
@@ -34,6 +37,7 @@ spplot(mytilus.cleaned,"PA",cex=0.01,col.regions=c("red","grey"))
 #Grainsize-Daten aufbereiten:
   #Daten einlesen und in SpatialPointsDataFrame umwandeln, Referenzsystem setzen
 mgs <- read.table("interpolated_d50_NorthSea_1nm.txt",header=T) #contains phi (column val)
+mgs <- mgs[,1:3]
 mgs1 <- mgs
 coordinates(mgs1)<-~lon+lat
 proj4string(mgs1)<-CRS("+init=epsg:4326")
@@ -59,22 +63,15 @@ grid.text("phi",x=unit(0.85,"npc"),y=unit(0.5,"npc"),rot=-90)
 
 
 #Kombinieren der Muschel- und der Korngrößen-Daten
-devtools::install_github("janhoo/crecs")
+  #devtools::install_github("janhoo/crecs")
 library(crecs)
 mgs_PA <- get.environ(mytilus.cleaned,stack(mgs_pixel)) #class SpatialPointsDataFrame
 
   #Zuschneiden auf den Bereich der Korngrößen-Daten
 mgs_PA2 <- mgs_PA[!is.na(mgs_PA$val),]
 
-  #Spalte anlegen, in der PA als 1 und 0 definiert ist --> als Faktor definieren
-#absence <- which(mgs_PA2$PA=="Absence")
-#presence <- which(mgs_PA2$PA=="Presence")
-#mgs_PA2[presence,"PA2"] <- 1
-#mgs_PA2[absence,"PA2"] <- 0
-#mgs_PA2$PA2 <- as.factor(mgs_PA2$PA2)
-
   #Karten erzeugen
-PA2_plot <- spplot(mgs_PA2,"PA2",cex=0.05,col.regions=c("red","grey"))
+PA2_plot <- spplot(mgs_PA2,"PA",cex=0.05,col.regions=c("red","grey"))
 val_plot <- spplot(mgs_PA2,"val",cex=0.01)
 library(gridExtra)
 grid.arrange(val_plot,PA2_plot,ncol=2)
@@ -83,7 +80,7 @@ grid.arrange(val_plot,PA2_plot,ncol=2)
 #Es müssen pseudo-absence Daten erzeugt werden
 set.seed(1)
 library(dismo)
-random.absence <- randomPoints(mgs_pixel,n=631,mytilus.cleaned)
+random.absence <- randomPoints(mgs_pixel,n=1396,mytilus.cleaned)
   #Umwandlung in einen Dataframe und Zuweisung der Koordinaten und eines 
     #Koordinaten-Refererenz Systems --> class=SpatialPoints
 random.absence <- as.data.frame(random.absence)
@@ -98,7 +95,8 @@ mgs_PA2$PA2 <- 1
 mgs.absence$PA2 <- 0
 library(maptools)
 mgsPA.bind <- spRbind(mgs_PA2[,3:ncol(mgs_PA2)],mgs.absence)
-mgsPA.bind$PA2 <- factor(mgsPA.bind$PA2)
+#mgsPA.bind$PA2 <- as.factor(mgsPA.bind$PA2) #wollen nicht Kategorien erhalten -->
+    #keine Klassifikation sondern Regression mit Random Forest Modell durchgeführt werden
   #Abbilden von presence und absence Punkten
 spplot(mgsPA.bind,"PA2",cex=0.01,col.regions=c("black","red"))
 

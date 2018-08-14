@@ -23,13 +23,15 @@ mytilus <- read.csv("Mytilus_SNS4_AP.csv",sep=";")
 summary(mytilus)
 ```
 
-Die Daten müssen noch gereinigt werden, d.h.  auf fehlerhafte Koordinaten, Duplikate und nicht-Mytilus Angaben überprüft werden. Außerdem behalten wir nur die Presence-Werte. 
+Die Daten müssen noch gereinigt werden, d.h.  auf fehlerhafte Koordinaten, Duplikate und nicht-Mytilus Angaben überprüft werden. Die Mittelmeer-Miesmuschel soll ebenfalls ausgeschlossen werden. Außerdem behalten wir nur die Presence-Werte. 
 
 ```{r}
 mytilus.valid = subset(mytilus, 
   !is.na(mytilus$Lat) & 
   !is.na(mytilus$Lon) &
   grepl("Mytilus", mytilus$Species) &
+  !grepl("Mytilus galloprovincialis",mytilus$Species)&
+  !grepl("Mytilus edulis galloprovincialis",mytilus$Species)&
   grepl("Presence", mytilus$PA))
 mytilus.duplicates = duplicated(mytilus.valid[, c("Lat","Lon")]) 
 mytilus.deduplicated <- subset(cbind(mytilus.valid,mytilus.duplicates), mytilus.duplicates==FALSE)
@@ -41,11 +43,11 @@ Wir benutzen den Dataframe jetzt als spatial data und reichern es mit
 Information zu Koordinaten und Referenzsystem aus dem `sp`-Paket an:
 
 ```{r}
-myt <- data.frame(mytilus.cleaned$Lon, mytilus.cleaned$Lat, mytilus.cleaned$PA)
+#myt <- data.frame(mytilus.cleaned$Lon, mytilus.cleaned$Lat, mytilus.cleaned$PA)
 library(sp)
-coordinates(myt) <- ~mytilus.cleaned.Lon + mytilus.cleaned.Lat
-proj4string(myt)<-CRS("+init=epsg:4326")
-plot(myt,cex=0.1)
+coordinates(mytilus.cleaned) <- ~Lon + Lat
+proj4string(mytilus.cleaned)<-CRS("+init=epsg:4326")
+plot(mytilus.cleaned,cex=0.1)
 ```
 
 # Korngröße (Teil 1)
@@ -76,7 +78,7 @@ library(crecs)
 Aus diesem Paket kann der Befehl `get.environ` zu gegebenen Punktdaten (`points`) einen Vektor mit Daten aus der Umgebung (`env`) erzeugen.
 
 ```{r}
-myt.env<-get.environ(points=myt,env=stack(Predictor))
+myt.env<-get.environ(points=mytilus.cleaned,env=stack(Predictor))
 #clip the points to SNS
 #med.env2<-med.env[!is.na(med.env$depthg14),]
 ```
@@ -103,20 +105,21 @@ sed.pixel=SpatialPixelsDataFrame(sed2,data=sed,tolerance=0.000100658)
 spplot(sed.pixel,"val", cex=0.1)
 ```
 
-Die Mytilus- und die Korngrößen-Daten werden nun zusammengeführt und auf den gemeinsamen Bereich zugeschnitten. Damit reduziert sich die Anzahl der Punkte auf 631.
+Die Mytilus- und die Korngrößen-Daten werden nun zusammengeführt und auf den gemeinsamen Bereich zugeschnitten. Damit reduziert sich die Anzahl der Punkte auf 1396.
 
 ```{r}
 library(crecs)
-myt.env<-get.environ(points=myt,env=stack(sed.pixel))
+myt.env<-get.environ(points=mytilus.cleaned,env=stack(sed.pixel))
 myt.env <- myt.env[!is.na(myt.env$val),]
 summary(myt.env)
 ```
 
-Es sollen nun 631 Hintergrundwerte, an denen die Miesmuschel nicht vorkommt, zufällig generiert werden (random-absence). Dies geschieht mit der Funktion randomPoints, die eine Matrix mit x und y Werten erzeugt
+Es sollen nun 1396 Hintergrundwerte, an denen die Miesmuschel nicht vorkommt, zufällig generiert werden (random-absence). Dies geschieht mit der Funktion randomPoints, die eine Matrix mit x und y Werten erzeugt. Als letztes Argument sind hier die Presence-Punkte angegeben. Dann werden die Zufallswerte nicht in diesen Zellen generiert.
 
 ```{r}
+set.seed(1)
 library(dismo)
-random.absence <- randomPoints(sed.pixel,n=631,myt)
+random.absence <- randomPoints(sed.pixel,n=1396,mytilus.cleaned)
 ```
 
 Die Matrix soll in einen SpatialPoints Datensatz umgewandelt werden und bekommt damit einen räumlichen Bezug. Anschließend werden die Absence-Punktdaten mit den Korngrößen-Daten vereint.
@@ -129,14 +132,24 @@ proj4string(random.absence) <- CRS("+init=epsg:4326")
 sed.absence <- get.environ(random.absence,stack(sed.pixel))
 ```
 
-Die Presence-Punktdaten und die generierten Absence-Punktdaten werden jetzt mit einander verbunden.
+Die Presence-Punktdaten und die generierten Absence-Punktdaten werden jetzt mit einander verbunden. Es wird eine neue Spalte PA2 angelegt, in der das Vorkommen von Mytilus als 1 und die Abwesenheit von Mytilus als 0 definiert wird.
 
 ```{r}
 myt.env$PA2 <- 1
 sed.absence$PA2 <- 0
 library(maptools)
+mgsPA.bind <- spRbind(myt.env[,3:ncol(myt.env)],sed.absence)
+spplot(mgsPA.bind,"PA2",cex=0.01,col.regions=c("black","red"))
 ```
+Mithilfe des Random Forest Modells sollen Vorhersagen über die Wahrscheinlichkeit gemacht werden, mit der die Miesmuschel bei gegebener mittlerer Korngröße vorkommt. Die mittlere Korngröße ist somit der Prädiktor im Modell, das Vorkommen der Miesmuschel die Response-Variable.
 
 ```{r}
-
+mgsPA.bind.df <- data.frame(mgsPA.bind)
+library(randomForest)
+rf <- randomForest(PA2~val,data=mgsPA.bind.df,ntree=500)
+mgsPA.bind$Prediction <- rf$predicted
+library(dismo)
+sed.pixel$prediction <- predict(rf,sed.pixel)
+spplot(sed.pixel,"prediction")
 ```
+
