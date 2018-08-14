@@ -65,22 +65,76 @@ spplot(Predictor,"mgs",formula=-log2(mgs/1000)~s1+s2,
       pretty=TRUE
       ) 
 library(grid)
-grid.text("-log2(mgs/1mm)",x=unit(0.95,"npc"),y=unit(0.50,"npc"),rot=-90)
+grid.text("-log2(mgs/1mm)",x=unit(1,"npc"),y=unit(0.50,"npc"),rot=-90)
+
+Predictor$phi <- -log2(Predictor$mgs/1000)
 ```
 
 Die entscheinden Schritte, um die Umweltdaten mit den Muscheldaten zusammenzubringen, benötigen das Paket `crecs` von `github`.  Dieses muss mithilfe der `devtools` installiert werden.
 
 ```{r}
 library(devtools)
-devtools::install_github("janhoo/crecs")
+#devtools::install_github("janhoo/crecs")
 library(crecs)
 ```
-Aus diesem Paket kann der Befehl `get.environ` zu gegebenen Punktdaten (`points`) einen Vektor mit Daten aus der Umgebung (`env`) erzeugen.
+Aus diesem Paket kann der Befehl `get.environ` zu gegebenen Punktdaten (`points`) einen Vektor mit Daten aus der Umgebung (`env`) erzeugen. Die Daten werden auf den Bereich der Korngröße zugeschnitten und nur die Spalten PA, mgs und depth werden behalten
 
 ```{r}
 myt.env<-get.environ(points=mytilus.cleaned,env=stack(Predictor))
 #clip the points to SNS
-#med.env2<-med.env[!is.na(med.env$depthg14),]
+myt.env2<-myt.env[!is.na(myt.env$phi),]
+myt.env2 <- myt.env2[,c("PA","depth","mgs","phi")]
+summary(myt.env2)
+```
+
+Man kann nun mit spplot Korngröße und Vorkommen von Mytilus gegenüberstellen.
+```{r}
+PA2_plot <- spplot(myt.env2,"PA",cex=0.1,col.regions=c("red","grey"))
+val_plot <- spplot(myt.env2,"phi",cex=0.1)
+library(gridExtra)
+grid.arrange(val_plot,PA2_plot,ncol=2)
+```
+
+Bisher haben wir nur Presence-Daten für Mytilus. Die Punkte, an denen Mytilus nicht vorkommt, müssen erst noch zufällig generiert werden. Die Funktion randomPoints ist genau für solche Fälle gedacht, sie generiert pseudo-absence Daten. Die Anzahl der generierten Punkte soll denen der Presence-Punkte entsprechen. Es sind 1259 Punkte.
+
+```{r}
+set.seed(1)
+library(dismo)
+random.absence.forPredictor <- randomPoints(Predictor,n=1259,mytilus.cleaned)
+  #Umwandlung in einen Dataframe und Zuweisung der Koordinaten und eines 
+    #Koordinaten-Refererenz Systems --> class=SpatialPoints
+random.absence.forPredictor <- as.data.frame(random.absence.forPredictor)
+coordinates(random.absence.forPredictor) <- ~ x+y
+proj4string(random.absence.forPredictor) <- CRS("+init=epsg:4326")
+  #Zusammenbringen der Absence-Punkte mit dem Korngrößen-Datensatz
+myt.absence <- get.environ(random.absence.forPredictor,stack(Predictor))
+
+#Kombinieren von Presence und Absence Punkten und schreiben als 1 für presence und 2 für absence
+myt.env2$PA2 <- 1
+myt.absence$PA2 <- 0
+library(maptools)
+sedPA.bind <- spRbind(myt.env2[,2:ncol(myt.env2)],myt.absence[,c("depth","mgs","PA2","phi")])
+spplot(sedPA.bind,"PA2",cex=0.1,col.regions=c("black","red"))
+```
+
+Nun kann das Random Forest Modell angewendet werden. Dazu gibt es ein extra Paket 'randomForest', das zuerst geladen werden muss.
+
+```{r}
+sedPA.bind.df <- data.frame(sedPA.bind)
+library(randomForest)
+rf.p <- randomForest(PA2~phi,data=sedPA.bind.df,ntree=500)
+sedPA.bind$Prediction <- rf.p$predicted
+library(dismo)
+Predictor$prediction <- predict(rf.p,Predictor)
+spplot(Predictor,"prediction")
+```
+Wie verändert sich das Bild, wenn wir als zweiten Prädiktor die Tiefe mit in das Random Forest Modell hinein nehmen?
+```{r}
+rf.p.withdepth <- randomForest(PA2~phi+depth,data=sedPA.bind.df,ntree=500)
+sedPA.bind$PredictionWithDepth <- rf.p.withdepth$predicted
+library(dismo)
+Predictor$predictionWithDepth <- predict(rf.p.withdepth,Predictor)
+spplot(Predictor,"predictionWithDepth")
 ```
 
 # Korngröße (Teil 2)
