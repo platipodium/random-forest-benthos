@@ -125,8 +125,8 @@ library(randomForest)
 rf.p <- randomForest(PA2~phi,data=sedPA.bind.df,ntree=500)
 sedPA.bind$Prediction <- rf.p$predicted
 library(dismo)
-Predictor$prediction <- predict(rf.p,Predictor)
-spplot(Predictor,"prediction")
+Predictor$prediction1 <- predict(rf.p,Predictor)
+spplot(Predictor,"prediction1")
 ```
 Wie verändert sich das Bild, wenn wir als zweiten Prädiktor die Tiefe mit in das Random Forest Modell hinein nehmen?
 ```{r}
@@ -207,3 +207,16 @@ sed.pixel$prediction <- predict(rf,sed.pixel)
 spplot(sed.pixel,"prediction")
 ```
 
+# Vergleich der Ergebnisse der beiden Korngrößen-Datensätze
+
+Um die Ergebnisse der beiden Korngrößen-Datensätze besser vergleichen zu können, werden sie auf den gemeinsamen Kartenausschnitt zugeschnitten. Dazu wird die Funktion 'intersect' aus dem Paket 'raster' verwendet.
+
+```{r}
+library(raster)
+intersect.part2 <- intersect(sed.pixel,Predictor)
+grainsize.part2 <- spplot(intersect.part2,"prediction")
+intersect.part1 <- intersect(Predictor,sed.pixel)
+grainsize.part1 <- spplot(intersect.part1,"prediction1")
+grainsize.part1
+grainsize.part2
+```
