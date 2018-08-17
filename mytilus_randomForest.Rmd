@@ -63,7 +63,7 @@ spplot(Predictor,"mgs",formula=-log2(mgs/1000)~s1+s2,
       col.regions = brewer.pal(11, "Spectral"),
       at=c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
       pretty=TRUE
-      ) 
+      )
 library(grid)
 grid.text("-log2(mgs/1mm)",x=unit(1,"npc"),y=unit(0.50,"npc"),rot=-90)
 
@@ -206,6 +206,43 @@ library(dismo)
 sed.pixel$prediction <- predict(rf,sed.pixel)
 spplot(sed.pixel,"prediction")
 ```
+
+Wie verändert sich das Bild, wenn man als zweiten Prädiktor die Tiefe mit einbezieht? Wir verwenden den Etopo1 Datensatz, der https://maps.ngdc.noaa.gov/viewers/wcs-client/ abbrufbar ist. 
+Die Daten werden eingelesen und durch Zuweisung des Referenz-Koordinaten-Systems und der Koordinaten in einen SpatialPointsDataFrame umgewandelt.
+```{r}
+  #Einlesen der Tiefedaten und Umwandlung in SpatialPointsDataFrame
+depth.etopo.df <- read.csv("etopo1_bedrock.xyz",sep="",header=FALSE)
+depth.etopo <- depth.etopo.df 
+coordinates(depth.etopo) <- ~V1 + V2
+proj4string(depth.etopo)<-CRS("+init=epsg:4326")
+```
+
+Der Datensatz lässt sich anschließend ohne Weiteres in einen SpatialPixelsDataFrame überführen
+```{r}
+  #Umwandlung der Tiefendaten in SpatialPixelsDataFrame
+depth.pixel <- SpatialPixelsDataFrame(depth.etopo,depth.etopo.df)
+spplot(depth.pixel,"V3")
+```
+Mit der 'get.environ' Funktion lassen sich dann die Werte jener Punkte extrahieren für die auch Grainsize und PA-Werte vorliegen.
+```{r}
+mgsDepthPA <- get.environ(mgsPA.bind,stack(depth.pixel))
+mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
+
+spplot(mgsDepthPA,"V3",cex=0.1)
+```
+
+
+Nun kann man das Random Forest Modell erneut anwenden mit Grainsize und Tiefe als Prädiktoren.
+```{r}
+rf.withDepth <- randomForest(PA2~ val+V3,mgsDepthPA)
+```
+
+Um jedoch die Vorhersagewerte als SpatialPixelsDataFrame zu erhalten und abbilden zu können, müssen zur Anwendung der Funktion 'predict' Korngröße und Tiefe gemeinsam in einem SpatialPixelsDataFrame vorliegen und als zweites Argument der Funktion 'predict' angegeben werden. Das Kombinieren stellt sich allerdings auch wegen unterschiedlicher cellsize als nicht so einfach heraus.
+```{r}
+#mgs_pixel$prediction <- predict(rf.withDepth,depth.pixel)
+```
+
+
 
 # Vergleich der Ergebnisse der beiden KorngrÃ¶ÃŸen-DatensÃ¤tze
 
