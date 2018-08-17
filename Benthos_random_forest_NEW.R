@@ -1,6 +1,7 @@
-#Prädiktives Mytilus Modell aus Random Forests
+#Praediktives Mytilus Modell aus Random Forests
 #Helmholtz-Zentrum Geesthacht
-
+#author: Charlotte Schramm, Carsten Lemmen
+#August 2018
 
 #Mytilusdaten aufbereiten:
   #Laden der CSV-Datei mit den Mytilus-Daten zum Vorkommen der Miesmuschel
@@ -13,7 +14,7 @@ summary(mytilus) #es gibt 32314 Presence-Daten aber nur 4900 Absence-Daten
 mytilus2 = subset(mytilus, !is.na(mytilus$Lat) & !is.na(mytilus$Lon) &
                   grepl("Mytilus", mytilus$Species)& 
                   !grepl("Mytilus galloprovincialis",mytilus$Species)&
-                  !grepl("Mytilus edulis galloprovincialis",mytilus$Species)&#nur Daten mit Mytilus (edulis) behalten
+                  !grepl("Mytilus edulis galloprovincialis",mytilus$Species)& #nur Daten mit Mytilus (edulis) behalten
                   grepl("Presence", mytilus$PA)) #und nur Presence-Werte behalten
     #remove all duplicate points
 dups <- duplicated(mytilus2[, c("Lat","Lon")])
@@ -24,7 +25,7 @@ mytilus4 <- subset(mytilus3, dups=="FALSE") #muss FALSE in Anführungszeichen st
 mytilus.cleaned=mytilus4[c("Lon","Lat","PA","Source")]
 summary(mytilus.cleaned)
 
-  #Mytilus-Daten in SpatialPointsDataFrame überführen und Referenzsystem festlegen
+  #Mytilus-Daten in SpatialPointsDataFrame ueberfuehren und Referenzsystem festlegen
     #make spatial points data frame
 library(sp)
 coordinates(mytilus.cleaned) <- ~Lon + Lat
@@ -57,17 +58,17 @@ mgs_pixel <- SpatialPixelsDataFrame(mgs1,data=mgs,tolerance = 0.000100658) #sugg
 spplot(mgs_pixel,"val")
 library(grid)
 grid.text("phi",x=unit(0.85,"npc"),y=unit(0.5,"npc"),rot=-90)
-      #Frage, die bleibt: Weshalb ist Angabe von tolerance nötig, liegt es möglicherweise an
-        #den Lücken im sonst scheinbar gegriddedeten Datensatz? Wie erfolgt die Umwandlung
+      #Frage, die bleibt: Weshalb ist Angabe von tolerance nötig, liegt es moeglicherweise an
+        #den Luecken im sonst scheinbar gegriddedeten Datensatz? Wie erfolgt die Umwandlung
         #von Punkt zu Pixel genau?
 
 
-#Kombinieren der Muschel- und der Korngrößen-Daten
+#Kombinieren der Muschel- und der Korngroessen-Daten
   #devtools::install_github("janhoo/crecs")
 library(crecs)
 mgs_PA <- get.environ(mytilus.cleaned,stack(mgs_pixel)) #class SpatialPointsDataFrame
 
-  #Zuschneiden auf den Bereich der Korngrößen-Daten
+  #Zuschneiden auf den Bereich der Korngroessen-Daten
 mgs_PA2 <- mgs_PA[!is.na(mgs_PA$val),]
 
   #Karten erzeugen
@@ -75,9 +76,9 @@ PA2_plot <- spplot(mgs_PA2,"PA",cex=0.05,col.regions=c("red","grey"))
 val_plot <- spplot(mgs_PA2,"val",cex=0.01)
 library(gridExtra)
 grid.arrange(val_plot,PA2_plot,ncol=2)
+library(raster)
 
-
-#Es müssen pseudo-absence Daten erzeugt werden
+#Es muessen pseudo-absence Daten erzeugt werden
 set.seed(1)
 library(dismo)
 random.absence <- randomPoints(mgs_pixel,n=1396,mytilus.cleaned)
@@ -86,29 +87,61 @@ random.absence <- randomPoints(mgs_pixel,n=1396,mytilus.cleaned)
 random.absence <- as.data.frame(random.absence)
 coordinates(random.absence) <- ~ x+y
 proj4string(random.absence) <- CRS("+init=epsg:4326")
-  #Zusammenbringen der Absence-Punkte mit dem Korngrößen-Datensatz
+  #Zusammenbringen der Absence-Punkte mit dem Korngroessen-Datensatz
 mgs.absence <- get.environ(random.absence,stack(mgs_pixel))
 
-#Kombinieren von Presence und Absence Punkten und schreiben als 1 für presence und 2 für
-  #absence --> Umwandlung in Faktoren
+#Kombinieren von Presence und Absence Punkten und schreiben als 0 für presence und 1 für
+  #absence
 mgs_PA2$PA2 <- 1
 mgs.absence$PA2 <- 0
 library(maptools)
 mgsPA.bind <- spRbind(mgs_PA2[,3:ncol(mgs_PA2)],mgs.absence)
 #mgsPA.bind$PA2 <- as.factor(mgsPA.bind$PA2) #wollen nicht Kategorien erhalten -->
-    #keine Klassifikation sondern Regression mit Random Forest Modell durchgeführt werden
+    #keine Klassifikation sondern Regression mit Random Forest Modell soll durchgeführt werden
   #Abbilden von presence und absence Punkten
 spplot(mgsPA.bind,"PA2",cex=0.01,col.regions=c("black","red"))
 
 
 #Random Forest Modell anwenden
+  #dazu erst in DataFrame umwandeln
 mgsPA2df <- data.frame(mgsPA.bind)
 library(randomForest)
-rf <- randomForest(PA2~val,data=mgsPA2df)
+rf <- randomForest(PA2~val,data=mgsPA2df,ntree=500)
+  #die vom Modell vorhergesagten Werte an den Punkten, an denen Presence-Absence-Daten vorhanden sind,
+    #wird als extra Spalte dem mgsPA.bind Datensatz angehaengt.
 mgsPA.bind$Prediction <- rf$predicted
+  #f�r den gesamten Pixeldatensatz, in dem die Korngroessen sind, werden die PA-Werte vorhergesagt
 library(dismo)
 mgs_pixel$prediction <- predict(rf,mgs_pixel)
 
 spplot(mgs_pixel,"prediction")
 predict <- spplot(mgs_PA2,"Prediction",cex=0.05,col.regions=c("red","grey"))
 grid.arrange(PA2_plot,predict,ncol=2)
+
+
+#Vergleich der verschiedene Korngroessen-Datensaetze
+  #Zuschneiden auf gemeinsamen Bereich mit der Funktion intersect aus dem raster package
+intersec <- intersect(mgs_pixel,Predictor)
+
+#Verwenden der Tiefe als zweiten Pr�diktor
+  #Etopo1 Datensatz (https://maps.ngdc.noaa.gov/viewers/wcs-client/)
+
+  #Einlesen der Tiefedaten und Umwandlung in SpatialPointsDataFrame
+depth.etopo.df <- read.csv("etopo1_bedrock.xyz",sep="",header=FALSE)
+depth.etopo <- depth.etopo.df 
+coordinates(depth.etopo) <- ~V1 + V2
+proj4string(depth.etopo)<-CRS("+init=epsg:4326")
+
+  #Umwandlung der Tiefendaten in SpatialPixelsDataFrame
+depth.pixel <- SpatialPixelsDataFrame(depth.etopo,depth.etopo.df)
+spplot(depth.pixel,"V3")
+
+mgsDepthPA <- get.environ(mgsPA.bind,stack(depth.pixel))
+mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
+
+spplot(mgsDepthPA,"V3",cex=0.1)
+rf.withDepth <- randomForest(PA2~ val+V3,mgsDepthPA)
+  #Um die Vorhersagewerte zu erhalten, m�ssen die SpatialPixels* Daten von Grainsize und Tiefe
+    #beide in einem kombiniert sein.
+mgs_pixel$prediction <- predict(rf.withDepth,depth.pixel)
+spplot(mgsDepthPA,"prediction",cex=0.1)
