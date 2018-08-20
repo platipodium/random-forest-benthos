@@ -207,23 +207,23 @@ sed.pixel$prediction <- predict(rf,sed.pixel)
 spplot(sed.pixel,"prediction")
 ```
 
-Wie verändert sich das Bild, wenn man als zweiten Prädiktor die Tiefe mit einbezieht? Wir verwenden den Etopo1 Datensatz, der https://maps.ngdc.noaa.gov/viewers/wcs-client/ abbrufbar ist. 
+Wie ver?ndert sich das Bild, wenn man als zweiten Pr?diktor die Tiefe mit einbezieht? Wir verwenden den Etopo1 Datensatz, der unter https://maps.ngdc.noaa.gov/viewers/wcs-client/ abbrufbar ist. 
 Die Daten werden eingelesen und durch Zuweisung des Referenz-Koordinaten-Systems und der Koordinaten in einen SpatialPointsDataFrame umgewandelt.
 ```{r}
-  #Einlesen der Tiefedaten und Umwandlung in SpatialPointsDataFrame
+  #Einlesen der Tiefendaten und Umwandlung in SpatialPointsDataFrame
 depth.etopo.df <- read.csv("etopo1_bedrock.xyz",sep="",header=FALSE)
 depth.etopo <- depth.etopo.df 
 coordinates(depth.etopo) <- ~V1 + V2
 proj4string(depth.etopo)<-CRS("+init=epsg:4326")
 ```
 
-Der Datensatz lässt sich anschließend ohne Weiteres in einen SpatialPixelsDataFrame überführen
+Der Datensatz l?sst sich anschlie?end ohne Weiteres in einen SpatialPixelsDataFrame ?berf?hren
 ```{r}
   #Umwandlung der Tiefendaten in SpatialPixelsDataFrame
 depth.pixel <- SpatialPixelsDataFrame(depth.etopo,depth.etopo.df)
 spplot(depth.pixel,"V3")
 ```
-Mit der 'get.environ' Funktion lassen sich dann die Werte jener Punkte extrahieren für die auch Grainsize und PA-Werte vorliegen.
+Mit der 'get.environ' Funktion lassen sich dann die Werte jener Punkte extrahieren f?r die auch Grainsize und PA-Werte vorliegen.
 ```{r}
 mgsDepthPA <- get.environ(mgsPA.bind,stack(depth.pixel))
 mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
@@ -232,13 +232,23 @@ spplot(mgsDepthPA,"V3",cex=0.1)
 ```
 
 
-Nun kann man das Random Forest Modell erneut anwenden mit Grainsize und Tiefe als Prädiktoren.
+Nun kann man das Random Forest Modell erneut anwenden mit Grainsize und Tiefe als Pr?diktoren.
 ```{r}
 rf.withDepth <- randomForest(PA2~ val+V3,mgsDepthPA)
 ```
 
-Um jedoch die Vorhersagewerte als SpatialPixelsDataFrame zu erhalten und abbilden zu können, müssen zur Anwendung der Funktion 'predict' Korngröße und Tiefe gemeinsam in einem SpatialPixelsDataFrame vorliegen und als zweites Argument der Funktion 'predict' angegeben werden. Das Kombinieren stellt sich allerdings auch wegen unterschiedlicher cellsize als nicht so einfach heraus.
+Um jedoch die Vorhersagewerte als SpatialPixelsDataFrame zu erhalten und abbilden zu k?nnen, m?ssen zur Anwendung der Funktion `predict` Korngr??e und Tiefe gemeinsam in einem SpatialPixelsDataFrame vorliegen und als zweites Argument der Funktion 'predict' angegeben werden. Das Kombinieren stellt sich allerdings auch wegen unterschiedlicher cellsize als nicht so einfach heraus. Wir benÃ¶tigen einen neuen SpatialPixelDataFrame, der Tiefe und KorngrÃ¶ÃŸe auf einem einheitlichen Gitter abbildet. Wir versuchen die Tiefeninformation auf das KorngrÃ¶ÃŸengitter zu interpolieren. Danach kann `predict` angewendet werden.
 ```{r}
+sed.raster <- raster(sed.pixel,layer=3)
+#sed.raster[] <- 1:ncell(sed.raster)
+depth.raster <- raster(depth.pixel,layer=3)
+res(sed.raster) <- c(xres(depth.raster),yres(depth.raster))
+#depth.raster[] <- 1:ncell(depth.raster)
+#extent(depth.raster)<-c(-3.89722,11.51189,50.91667,61)
+extent(depth.raster)<-c(xmin(sed.raster),xmax(sed.raster),ymin(sed.raster),ymax(sed.raster))
+
+sed.depth.merge.raster <- merge(sed.raster,depth.raster)
+
 #mgs_pixel$prediction <- predict(rf.withDepth,depth.pixel)
 ```
 
