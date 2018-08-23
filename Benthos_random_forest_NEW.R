@@ -64,6 +64,7 @@ plot(mgs_t$lon,mgs_t$lat) #es gibt offenbar fehlende Werte
     #Umwandlung mit der Funktion SpatialPixelDataFrame und abbilden
 mgs_pixel <- SpatialPixelsDataFrame(mgs1,data=mgs,tolerance = 0.000100658) #suggested tolerance
 spplot(mgs_pixel,"val")
+
 library(grid)
 grid.text("phi",x=unit(0.85,"npc"),y=unit(0.5,"npc"),rot=-90)
       #Frage, die bleibt: Weshalb ist Angabe von tolerance nötig, liegt es moeglicherweise an

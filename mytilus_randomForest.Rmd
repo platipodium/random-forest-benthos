@@ -43,17 +43,16 @@ Wir benutzen den Dataframe jetzt als spatial data und reichern es mit
 Information zu Koordinaten und Referenzsystem aus dem `sp`-Paket an:
 
 ```{r}
-#myt <- data.frame(mytilus.cleaned$Lon, mytilus.cleaned$Lat, mytilus.cleaned$PA)
 library(sp)
 coordinates(mytilus.cleaned) <- ~Lon + Lat
 proj4string(mytilus.cleaned)<-CRS("+init=epsg:4326")
-plot(mytilus.cleaned,cex=0.1)
+spplot(mytilus.cleaned,"PA",cex=0.1,col.regions=c("red","black"),scales=list(draw=TRUE),main=list(label="Point data of Mytilus",cex=1))
 ```
 
 # Korngröße (Teil 1)
 
 Die Sedimentdaten sind in zwei Versionen vorhanden, einmal in der Datei `
-Predictor.rda` und in einer weiteren Datei `interpolated_d50_NorthSea_1nm.txt`. Hier der Versuch mit der ersten (später besser die zweite nehmen, s.u.).  Die Rohdaten sind Mittlere Korngröße ("median grain size", msg), und werden in der Krumbein-Phi-Skala dargestellt, d.h. den negativen binären Logarithmus der auf 1 mm normierten Korngröße. 
+Predictor.rda` und in einer weiteren Datei `interpolated_d50_NorthSea_1nm.txt`. Hier der Versuch mit der ersten (später besser die zweite nehmen, s.u.).  Die Rohdaten sind Mittlere Korngröße ("median grain size", mgs), und werden in der Krumbein-Phi-Skala dargestellt, d.h. den negativen binären Logarithmus der auf 1 mm normierten Korngröße. 
 
 ```{r}
 load("Predictor.rda")
@@ -62,10 +61,12 @@ library(sp)
 spplot(Predictor,"mgs",formula=-log2(mgs/1000)~s1+s2,
       col.regions = brewer.pal(11, "Spectral"),
       at=c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
-      pretty=TRUE
+      pretty=TRUE,
+      main=list(label="Median grain size (mgs)",cex=1),
+      scales=list(draw=TRUE)
       )
 library(grid)
-grid.text("-log2(mgs/1mm)",x=unit(1,"npc"),y=unit(0.50,"npc"),rot=-90)
+grid.text("-log2(mgs/1mm)",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 
 Predictor$phi <- -log2(Predictor$mgs/1000)
 ```
@@ -89,8 +90,16 @@ summary(myt.env2)
 
 Man kann nun mit spplot Korngröße und Vorkommen von Mytilus gegenüberstellen.
 ```{r}
-PA2_plot <- spplot(myt.env2,"PA",cex=0.1,col.regions=c("red","grey"))
-val_plot <- spplot(myt.env2,"phi",cex=0.1)
+library(rworldxtra)
+data(countriesHigh)
+PA2_plot <- spplot(myt.env2,"PA",cex=0.5,col.regions=c("black","red"),
+                   main=list(label="Point data Mytilus",cex=1),
+                   ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
+                   sp.layout=list("sp.polygons",countriesHigh,fill="grey"))
+val_plot <- spplot(myt.env2,"phi",cex=0.5,
+                   main=list(label="Point data median grain size",cex=1),
+                   ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
+                   sp.layout=list("sp.polygons",countriesHigh,fill="grey"))
 library(gridExtra)
 grid.arrange(val_plot,PA2_plot,ncol=2)
 ```
@@ -109,24 +118,35 @@ proj4string(random.absence.forPredictor) <- CRS("+init=epsg:4326")
   #Zusammenbringen der Absence-Punkte mit dem Korngrößen-Datensatz
 myt.absence <- get.environ(random.absence.forPredictor,stack(Predictor))
 
-#Kombinieren von Presence und Absence Punkten und schreiben als 1 für presence und 2 für absence
+#Kombinieren von Presence und Absence Punkten und schreiben als 1 für presence und 0 für absence
 myt.env2$PA2 <- 1
 myt.absence$PA2 <- 0
 library(maptools)
 sedPA.bind <- spRbind(myt.env2[,2:ncol(myt.env2)],myt.absence[,c("depth","mgs","PA2","phi")])
-spplot(sedPA.bind,"PA2",cex=0.1,col.regions=c("black","red"))
+sedPA.bind$PA2 <- as.factor(sedPA.bind$PA2)
+spplot(sedPA.bind,"PA2",cex=0.5,col.regions=c("black","red"),
+       main=list("Presence and random absence data of Mytilus",cex=1),
+       scales=list(draw=TRUE),
+       ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       )
 ```
 
 Nun kann das Random Forest Modell angewendet werden. Dazu gibt es ein extra Paket 'randomForest', das zuerst geladen werden muss.
 
 ```{r}
+sedPA.bind <- spRbind(myt.env2[,2:ncol(myt.env2)],myt.absence[,c("depth","mgs","PA2","phi")])
 sedPA.bind.df <- data.frame(sedPA.bind)
 library(randomForest)
 rf.p <- randomForest(PA2~phi,data=sedPA.bind.df,ntree=500)
 sedPA.bind$Prediction <- rf.p$predicted
 library(dismo)
 Predictor$prediction1 <- predict(rf.p,Predictor)
-spplot(Predictor,"prediction1")
+spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),col.regions = brewer.pal(10,"Spectral"),
+      at=seq(from=0,to=1,by=0.1),pretty=TRUE, 
+      ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
+      sp.layout=list("sp.polygons",countriesHigh,fill="grey"))
+grid.text("probability",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 Wie verändert sich das Bild, wenn wir als zweiten Prädiktor die Tiefe mit in das Random Forest Modell hinein nehmen?
 ```{r}
@@ -134,7 +154,14 @@ rf.p.withdepth <- randomForest(PA2~phi+depth,data=sedPA.bind.df,ntree=500)
 sedPA.bind$PredictionWithDepth <- rf.p.withdepth$predicted
 library(dismo)
 Predictor$predictionWithDepth <- predict(rf.p.withdepth,Predictor)
-spplot(Predictor,"predictionWithDepth")
+spplot(Predictor,"predictionWithDepth",main=list("Occurence probability",cex=1),
+       col.regions = brewer.pal(11, "Spectral"),
+       at=seq(from=0,to=1,by=0.1),
+       pretty=TRUE,
+       ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       )
+grid.text("probability",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 
 # Korngröße (Teil 2)
@@ -148,7 +175,10 @@ summary(sed)
 sed2 <- sed
 coordinates(sed2) <- ~lon + lat
 proj4string(sed2)<-CRS("+init=epsg:4326")
-spplot(sed2,"val", cex=0.1)
+spplot(sed2,"val",cex=0.1,col.regions=brewer.pal(5,"OrRd"),
+       ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       )
 ```
 
 Die Daten sind klassifizierte Punkdaten, die in ein kontinuierliches Raster umgewandelt werden sollen. Die angegebene Wert für tolerance ist der von R vorgeschlagene Wert. Die Angabe des Wertes ist nötig, da die Daten nicht komplett gegridded sind. 
@@ -156,7 +186,10 @@ Die Daten sind klassifizierte Punkdaten, die in ein kontinuierliches Raster umge
 
 ```{r}
 sed.pixel=SpatialPixelsDataFrame(sed2,data=sed,tolerance=0.000100658)
-spplot(sed.pixel,"val", cex=0.1)
+spplot(sed.pixel,"val", cex=0.1,
+       ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       )
 ```
 
 Die Mytilus- und die Korngrößen-Daten werden nun zusammengeführt und auf den gemeinsamen Bereich zugeschnitten. Damit reduziert sich die Anzahl der Punkte auf 1396.
@@ -193,7 +226,9 @@ myt.env$PA2 <- 1
 sed.absence$PA2 <- 0
 library(maptools)
 mgsPA.bind <- spRbind(myt.env[,3:ncol(myt.env)],sed.absence)
-spplot(mgsPA.bind,"PA2",cex=0.01,col.regions=c("black","red"))
+spplot(mgsPA.bind,"PA2",cex=0.01,col.regions=c("black","red"),
+       ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey"))
 ```
 Mithilfe des Random Forest Modells sollen Vorhersagen über die Wahrscheinlichkeit gemacht werden, mit der die Miesmuschel bei gegebener mittlerer Korngröße vorkommt. Die mittlere Korngröße ist somit der Prädiktor im Modell, das Vorkommen der Miesmuschel die Response-Variable.
 
@@ -204,7 +239,12 @@ rf <- randomForest(PA2~val,data=mgsPA.bind.df,ntree=500)
 mgsPA.bind$Prediction <- rf$predicted
 library(dismo)
 sed.pixel$prediction <- predict(rf,sed.pixel)
-spplot(sed.pixel,"prediction")
+spplot(sed.pixel,"prediction",
+       col.regions=brewer.pal(9,"OrRd"),
+       at=seq(from=0,to=1,by=1/9),
+       ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       )
 ```
 
 Wie ver?ndert sich das Bild, wenn man als zweiten Pr?diktor die Tiefe mit einbezieht? Wir verwenden den Etopo1 Datensatz, der unter https://maps.ngdc.noaa.gov/viewers/wcs-client/ abbrufbar ist. 
@@ -221,14 +261,16 @@ Der Datensatz l?sst sich anschlie?end ohne Weiteres in einen SpatialPixelsDataFr
 ```{r}
   #Umwandlung der Tiefendaten in SpatialPixelsDataFrame
 depth.pixel <- SpatialPixelsDataFrame(depth.etopo,depth.etopo.df)
-spplot(depth.pixel,"V3")
+spplot(depth.pixel,"V3",col.regions=colorRampPalette(c("beige","brown","blue")))
 ```
 Mit der 'get.environ' Funktion lassen sich dann die Werte jener Punkte extrahieren f?r die auch Grainsize und PA-Werte vorliegen.
 ```{r}
 mgsDepthPA <- get.environ(mgsPA.bind,stack(depth.pixel))
 mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
 
-spplot(mgsDepthPA,"V3",cex=0.1)
+spplot(mgsDepthPA,"V3",cex=0.1,
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       )
 ```
 
 
@@ -239,34 +281,24 @@ rf.withDepth <- randomForest(PA2~ val+V3,mgsDepthPA)
 
 Um jedoch die Vorhersagewerte als SpatialPixelsDataFrame zu erhalten und abbilden zu k?nnen, m?ssen zur Anwendung der Funktion `predict` Korngr??e und Tiefe gemeinsam in einem SpatialPixelsDataFrame vorliegen und als zweites Argument der Funktion 'predict' angegeben werden. Das Kombinieren stellt sich allerdings auch wegen unterschiedlicher cellsize als nicht so einfach heraus. Wir benötigen einen neuen SpatialPixelDataFrame, der Tiefe und Korngröße auf einem einheitlichen Gitter abbildet. Wir versuchen die Tiefeninformation auf das Korngrößengitter zu interpolieren. Danach kann `predict` angewendet werden.
 ```{r}
-<<<<<<< HEAD
-gridded(sed.pixel)
-library(gstat)
-depth.pixel_on_sed.pixel <-idw(formula=V3~1,locations=depth.pixel,newdata=sed.pixel)
-sed.raster <- raster(sed.pixel,layer=3)
-#sed.raster[] <- 1:ncell(sed.raster)
-depth.raster <- raster(depth.pixel,layer=3)
-
-#depth.raster[] <- 1:ncell(depth.raster)
-#extent(depth.raster)<-c(-3.89722,11.51189,50.91667,61)
-extent(depth.raster)<-c(xmin(sed.raster),xmax(sed.raster),ymin(sed.raster),ymax(sed.raster))
-res(sed.raster) <- c(xres(depth.raster),yres(depth.raster))
-sed.depth.merge.raster <- merge(sed.raster,depth.raster)
-
-#mgs_pixel$prediction <- predict(rf.withDepth,depth.pixel)
-=======
 library(gstat)
 # Uncomment to redo the interpolation, which takes about 1 day to compute
 # better to read the produced interpolated data from file
 #depth.pixel_on_sed.pixel <- krige(formula=V3~1, locations=depth.pixel,newdata=sed.pixel)
 #saveRDS(depth.pixel_on_sed.pixel,file="etopo1_interpolated_to_noah_grain=size_grid.rda")
 depth.pixel_on_sed.pixel <- readRDS("etopo1_interpolated_to_noah_grainsize_grid.rda")
-spplot(depth.pixel_on_sed.pixel,"var1.pred")
+spplot(depth.pixel_on_sed.pixel,"var1.pred",
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       )
 depth.pixel_on_sed.pixel$val <- sed.pixel$val
 depth.pixel_on_sed.pixel$V3 <- depth.pixel_on_sed.pixel$var1.pred
 depth.pixel_on_sed.pixel$prediction <- predict(rf.withDepth,depth.pixel_on_sed.pixel)
-spplot(depth.pixel_on_sed.pixel,"prediction")
->>>>>>> df2c81bf4632e093c6cdf4847f5d8721dffcbf9c
+spplot(depth.pixel_on_sed.pixel,"prediction",
+       col.regions=brewer.pal(11,"Spectral"),
+       at=seq(from=0,to=1,by=0.1),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       )
+
 ```
 
 
