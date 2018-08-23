@@ -2,18 +2,15 @@
 #Random Forest Model for North Sea Benthos
 #Charlotte Schramm, Carsten Lemmen
 
-#Pakete installieren
-library(geoR)
-install.packages("dplyr")
-library(dplyr)
-install.packages("ggplot2")
-library(ggplot2)
-install.packages("devtools")
-library(devtools)
-install.packages("spatstat")
-library(spatstat)
-install.packages("rgeos")
-library(rgeos)
+#Um dieses Dokument reproduzierbar zu machen, verwenden wir die Funktion checkpoint, die alle benötigten Pakete installiert,
+#die so verwendet wurden.
+#library(checkpoint)
+#checkpoint(snapshotDate = "2018-08-22")
+
+#Pakete laden
+packages <- c("sp","devtools","grid","RColorBrewer","crecs","dismo","maptools","randomForest")
+lapply(packages, require, character=TRUE)
+
 
 #Daten einlesen
 mytilus_alldata <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".")

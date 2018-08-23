@@ -10,6 +10,7 @@ Mytilus_SNS4_AP.csv
 mytilus_randomForest_files
 mytilus_randomForest.html
 mytilus_randomForest.odt
+mytilus_randomForest.pdf
 mytilus_randomForest.docx
 random-forest-benthos.Rproj
 mytilus_randomForest.R
@@ -19,3 +20,4 @@ mytilus_randomForest.R
 etopo1_bedrock.xyz
 etopo1_bedrock.tif
 .RDataTmp
+etopo1_interpolated_to_noah_grainsize_grid.rda

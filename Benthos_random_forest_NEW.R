@@ -3,6 +3,14 @@
 #author: Charlotte Schramm, Carsten Lemmen
 #August 2018
 
+#Das Dokument reproduzierbar machen
+#library(checkpoint)
+#checkpoint(snapshotDate = "2018-08-22")
+
+#Pakete laden
+packages <- c("sp","RColorBrewer","grid","crecs","gridExtra","raster","maptools","randomForest")
+lapply(packages, require, character=TRUE)
+
 #Mytilusdaten aufbereiten:
   #Laden der CSV-Datei mit den Mytilus-Daten zum Vorkommen der Miesmuschel
 mytilus <- read.csv("Mytilus_SNS4_AP.csv", sep=";") #diese Datei hat 37214 Zeilen

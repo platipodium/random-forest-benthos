@@ -239,6 +239,7 @@ rf.withDepth <- randomForest(PA2~ val+V3,mgsDepthPA)
 
 Um jedoch die Vorhersagewerte als SpatialPixelsDataFrame zu erhalten und abbilden zu k?nnen, m?ssen zur Anwendung der Funktion `predict` Korngr??e und Tiefe gemeinsam in einem SpatialPixelsDataFrame vorliegen und als zweites Argument der Funktion 'predict' angegeben werden. Das Kombinieren stellt sich allerdings auch wegen unterschiedlicher cellsize als nicht so einfach heraus. Wir benötigen einen neuen SpatialPixelDataFrame, der Tiefe und Korngröße auf einem einheitlichen Gitter abbildet. Wir versuchen die Tiefeninformation auf das Korngrößengitter zu interpolieren. Danach kann `predict` angewendet werden.
 ```{r}
+<<<<<<< HEAD
 gridded(sed.pixel)
 library(gstat)
 depth.pixel_on_sed.pixel <-idw(formula=V3~1,locations=depth.pixel,newdata=sed.pixel)
@@ -253,8 +254,20 @@ res(sed.raster) <- c(xres(depth.raster),yres(depth.raster))
 sed.depth.merge.raster <- merge(sed.raster,depth.raster)
 
 #mgs_pixel$prediction <- predict(rf.withDepth,depth.pixel)
+=======
+library(gstat)
+# Uncomment to redo the interpolation, which takes about 1 day to compute
+# better to read the produced interpolated data from file
+#depth.pixel_on_sed.pixel <- krige(formula=V3~1, locations=depth.pixel,newdata=sed.pixel)
+#saveRDS(depth.pixel_on_sed.pixel,file="etopo1_interpolated_to_noah_grain=size_grid.rda")
+depth.pixel_on_sed.pixel <- readRDS("etopo1_interpolated_to_noah_grainsize_grid.rda")
+spplot(depth.pixel_on_sed.pixel,"var1.pred")
+depth.pixel_on_sed.pixel$val <- sed.pixel$val
+depth.pixel_on_sed.pixel$V3 <- depth.pixel_on_sed.pixel$var1.pred
+depth.pixel_on_sed.pixel$prediction <- predict(rf.withDepth,depth.pixel_on_sed.pixel)
+spplot(depth.pixel_on_sed.pixel,"prediction")
+>>>>>>> df2c81bf4632e093c6cdf4847f5d8721dffcbf9c
 ```
-
 
 
 # Vergleich der Ergebnisse der beiden Korngrößen-Datensätze
