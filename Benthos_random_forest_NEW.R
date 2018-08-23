@@ -110,7 +110,7 @@ rf <- randomForest(PA2~val,data=mgsPA2df,ntree=500)
   #die vom Modell vorhergesagten Werte an den Punkten, an denen Presence-Absence-Daten vorhanden sind,
     #wird als extra Spalte dem mgsPA.bind Datensatz angehaengt.
 mgsPA.bind$Prediction <- rf$predicted
-  #für den gesamten Pixeldatensatz, in dem die Korngroessen sind, werden die PA-Werte vorhergesagt
+  #f?r den gesamten Pixeldatensatz, in dem die Korngroessen sind, werden die PA-Werte vorhergesagt
 library(dismo)
 mgs_pixel$prediction <- predict(rf,mgs_pixel)
 
@@ -123,7 +123,7 @@ grid.arrange(PA2_plot,predict,ncol=2)
   #Zuschneiden auf gemeinsamen Bereich mit der Funktion intersect aus dem raster package
 intersec <- intersect(mgs_pixel,Predictor)
 
-#Verwenden der Tiefe als zweiten Prädiktor
+#Verwenden der Tiefe als zweiten Pr?diktor
   #Etopo1 Datensatz (https://maps.ngdc.noaa.gov/viewers/wcs-client/)
 
   #Einlesen der Tiefedaten und Umwandlung in SpatialPointsDataFrame
@@ -141,7 +141,7 @@ mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
 
 spplot(mgsDepthPA,"V3",cex=0.1)
 rf.withDepth <- randomForest(PA2~ val+V3,mgsDepthPA)
-  #Um die Vorhersagewerte zu erhalten, müssen die SpatialPixels* Daten von Grainsize und Tiefe
+  #Um die Vorhersagewerte zu erhalten, m?ssen die SpatialPixels* Daten von Grainsize und Tiefe
     #beide in einem kombiniert sein.
 mgs_pixel$prediction <- predict(rf.withDepth,depth.pixel)
 spplot(mgsDepthPA,"prediction",cex=0.1)

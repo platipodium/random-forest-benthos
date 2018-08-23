@@ -239,14 +239,17 @@ rf.withDepth <- randomForest(PA2~ val+V3,mgsDepthPA)
 
 Um jedoch die Vorhersagewerte als SpatialPixelsDataFrame zu erhalten und abbilden zu k?nnen, m?ssen zur Anwendung der Funktion `predict` Korngr??e und Tiefe gemeinsam in einem SpatialPixelsDataFrame vorliegen und als zweites Argument der Funktion 'predict' angegeben werden. Das Kombinieren stellt sich allerdings auch wegen unterschiedlicher cellsize als nicht so einfach heraus. Wir benötigen einen neuen SpatialPixelDataFrame, der Tiefe und Korngröße auf einem einheitlichen Gitter abbildet. Wir versuchen die Tiefeninformation auf das Korngrößengitter zu interpolieren. Danach kann `predict` angewendet werden.
 ```{r}
+gridded(sed.pixel)
+library(gstat)
+depth.pixel_on_sed.pixel <-idw(formula=V3~1,locations=depth.pixel,newdata=sed.pixel)
 sed.raster <- raster(sed.pixel,layer=3)
 #sed.raster[] <- 1:ncell(sed.raster)
 depth.raster <- raster(depth.pixel,layer=3)
-res(sed.raster) <- c(xres(depth.raster),yres(depth.raster))
+
 #depth.raster[] <- 1:ncell(depth.raster)
 #extent(depth.raster)<-c(-3.89722,11.51189,50.91667,61)
 extent(depth.raster)<-c(xmin(sed.raster),xmax(sed.raster),ymin(sed.raster),ymax(sed.raster))
-
+res(sed.raster) <- c(xres(depth.raster),yres(depth.raster))
 sed.depth.merge.raster <- merge(sed.raster,depth.raster)
 
 #mgs_pixel$prediction <- predict(rf.withDepth,depth.pixel)
