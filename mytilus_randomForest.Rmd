@@ -59,14 +59,14 @@ load("Predictor.rda")
 library(RColorBrewer)
 library(sp)
 spplot(Predictor,"mgs",formula=-log2(mgs/1000)~s1+s2,
-      col.regions = brewer.pal(11, "Spectral"),
-      at=c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
+      col.regions = terrain.colors(21)[1:20],
+      at=seq(from=-4.181,to=7.788,by=(7.788+4.181)/20),
       pretty=TRUE,
       main=list(label="Median grain size (mgs)",cex=1),
       scales=list(draw=TRUE)
       )
 library(grid)
-grid.text("-log2(mgs/1mm)",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+grid.text("phi=-log2(mgs/1mm)",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 
 Predictor$phi <- -log2(Predictor$mgs/1000)
 ```
@@ -142,11 +142,13 @@ rf.p <- randomForest(PA2~phi,data=sedPA.bind.df,ntree=500)
 sedPA.bind$Prediction <- rf.p$predicted
 library(dismo)
 Predictor$prediction1 <- predict(rf.p,Predictor)
-spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),col.regions = brewer.pal(10,"Spectral"),
-      at=seq(from=0,to=1,by=0.1),pretty=TRUE, 
-      ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
-      sp.layout=list("sp.polygons",countriesHigh,fill="grey"))
-grid.text("probability",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),
+       col.regions = brewer.pal(9,"OrRd"),
+       at=seq(from=0,to=1,by=1/9),pretty=TRUE, 
+       ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+      )
+grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 Wie verändert sich das Bild, wenn wir als zweiten Prädiktor die Tiefe mit in das Random Forest Modell hinein nehmen?
 ```{r}
@@ -155,13 +157,13 @@ sedPA.bind$PredictionWithDepth <- rf.p.withdepth$predicted
 library(dismo)
 Predictor$predictionWithDepth <- predict(rf.p.withdepth,Predictor)
 spplot(Predictor,"predictionWithDepth",main=list("Occurence probability",cex=1),
-       col.regions = brewer.pal(11, "Spectral"),
-       at=seq(from=0,to=1,by=0.1),
+       col.regions = brewer.pal(9,"OrRd"),
+       at=seq(from=0,to=1,by=1/9),
        pretty=TRUE,
        ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey")
        )
-grid.text("probability",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 
 # Korngröße (Teil 2)
@@ -175,7 +177,8 @@ summary(sed)
 sed2 <- sed
 coordinates(sed2) <- ~lon + lat
 proj4string(sed2)<-CRS("+init=epsg:4326")
-spplot(sed2,"val",cex=0.1,col.regions=brewer.pal(5,"OrRd"),
+spplot(sed2,"val",cex=0.1,col.regions=terrain.colors(6)[1:5],
+       main=list("median grain size",cex=1),
        ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey")
        )
@@ -187,9 +190,18 @@ Die Daten sind klassifizierte Punkdaten, die in ein kontinuierliches Raster umge
 ```{r}
 sed.pixel=SpatialPixelsDataFrame(sed2,data=sed,tolerance=0.000100658)
 spplot(sed.pixel,"val", cex=0.1,
+       main=list("Median grain size (mgs)",cex=1),
+       col.regions=terrain.colors(21)[1:20],
+       at=seq(from=-4,to=4,by=8/20),
        ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
-       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       sp.layout=list(
+         list("sp.polygons",countriesHigh,fill="grey"),
+         list("sp.lines", rasterToContour(raster(depth.pixel_on_sed.pixel),
+                                          levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
+              )
        )
+)
+grid.text("phi (-log 2 mgs/1mm)",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 
 Die Mytilus- und die Korngrößen-Daten werden nun zusammengeführt und auf den gemeinsamen Bereich zugeschnitten. Damit reduziert sich die Anzahl der Punkte auf 1396.
@@ -226,9 +238,14 @@ myt.env$PA2 <- 1
 sed.absence$PA2 <- 0
 library(maptools)
 mgsPA.bind <- spRbind(myt.env[,3:ncol(myt.env)],sed.absence)
-spplot(mgsPA.bind,"PA2",cex=0.01,col.regions=c("black","red"),
+mgsPA.bind$PA2 <- as.factor(mgsPA.bind$PA2)
+spplot(mgsPA.bind,"PA2",cex=0.5,col.regions=c("black","red"),
+       main=list("Presence and random absence points of Mytilus",cex=1),
        ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
-       sp.layout=list("sp.polygons",countriesHigh,fill="grey"))
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey"),
+       scales=list(draw=TRUE)
+       )
+mgsPA.bind <- spRbind(myt.env[,3:ncol(myt.env)],sed.absence)
 ```
 Mithilfe des Random Forest Modells sollen Vorhersagen über die Wahrscheinlichkeit gemacht werden, mit der die Miesmuschel bei gegebener mittlerer Korngröße vorkommt. Die mittlere Korngröße ist somit der Prädiktor im Modell, das Vorkommen der Miesmuschel die Response-Variable.
 
@@ -240,11 +257,14 @@ mgsPA.bind$Prediction <- rf$predicted
 library(dismo)
 sed.pixel$prediction <- predict(rf,sed.pixel)
 spplot(sed.pixel,"prediction",
-       col.regions=brewer.pal(9,"OrRd"),
+       main=list("Occurence probability",cex=1),
+       col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),
+       scales=list(draw=TRUE),
        ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey")
        )
+grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 
 Wie ver?ndert sich das Bild, wenn man als zweiten Pr?diktor die Tiefe mit einbezieht? Wir verwenden den Etopo1 Datensatz, der unter https://maps.ngdc.noaa.gov/viewers/wcs-client/ abbrufbar ist. 
@@ -261,15 +281,28 @@ Der Datensatz l?sst sich anschlie?end ohne Weiteres in einen SpatialPixelsDataFr
 ```{r}
   #Umwandlung der Tiefendaten in SpatialPixelsDataFrame
 depth.pixel <- SpatialPixelsDataFrame(depth.etopo,depth.etopo.df)
-spplot(depth.pixel,"V3",col.regions=colorRampPalette(c("beige","brown","blue")))
+library(grDevices)
+water_color <-  topo.colors(32)[1:11]
+land_color <- topo.colors(32)[13:32]
+spplot(depth.pixel,"V3",
+       main=list("Bathymetry",cex=1),
+       col.regions=c(water_color,land_color),
+       at=c(seq(from=-1547.00,to=0,by=1550/11),seq(0,1626.00,by=1626/20)),
+       scales=list(draw=TRUE)
+       )
+grid.text("depth [m]",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 Mit der 'get.environ' Funktion lassen sich dann die Werte jener Punkte extrahieren f?r die auch Grainsize und PA-Werte vorliegen.
+
 ```{r}
 mgsDepthPA <- get.environ(mgsPA.bind,stack(depth.pixel))
 mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
 
-spplot(mgsDepthPA,"V3",cex=0.1,
-       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+spplot(mgsDepthPA,"V3",cex=0.5,
+       main=list("Median grain size",cex=1),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey"),
+       col.regions=terrain.colors(6)[1:5],
+       scales=list(draw=TRUE)
        )
 ```
 
@@ -287,18 +320,44 @@ library(gstat)
 #depth.pixel_on_sed.pixel <- krige(formula=V3~1, locations=depth.pixel,newdata=sed.pixel)
 #saveRDS(depth.pixel_on_sed.pixel,file="etopo1_interpolated_to_noah_grain=size_grid.rda")
 depth.pixel_on_sed.pixel <- readRDS("etopo1_interpolated_to_noah_grainsize_grid.rda")
-spplot(depth.pixel_on_sed.pixel,"var1.pred",
-       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+spplot(depth.pixel_on_sed.pixel,"var1.pred",formula=-var1.pred~lon+lat,
+       main=list("Bathymetry (based on etopo1)",cex=1),
+       sp.layout=list(
+         list("sp.polygons",countriesHigh,fill="grey"),
+         list("sp.lines", rasterToContour(raster(depth.pixel_on_sed.pixel),
+                                          levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
+              )
+       ),
+       col.regions=blues9,
+       at=c(0,5,10,20,30,50,100,200,500),
+       scales=list(draw=TRUE)
        )
+grid.text("depth (m)",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+```
+
+```{r}
 depth.pixel_on_sed.pixel$val <- sed.pixel$val
 depth.pixel_on_sed.pixel$V3 <- depth.pixel_on_sed.pixel$var1.pred
 depth.pixel_on_sed.pixel$prediction <- predict(rf.withDepth,depth.pixel_on_sed.pixel)
+mgsPA.bind_onlyPA2 <- mgsPA.bind[,c(1,2,4)] 
 spplot(depth.pixel_on_sed.pixel,"prediction",
-       col.regions=brewer.pal(11,"Spectral"),
-       at=seq(from=0,to=1,by=0.1),
-       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       main=list("Occurence probability",cex=1),
+       col.regions=brewer.pal(9,"OrRd"),at=seq(from=0,to=1,by=1/9),
+       scales=list(draw=TRUE),
+       sp.layout=list(
+         list("SpatialPolygonsRescale", layout.north.arrow(),	offset = c(178750,332500), scale = 400),
+         list("SpatialPolygonsRescale",layout.scale.bar(),offset = c(40000, 540000), scale = 500, 
+              fill=c("transparent","black")),
+         list("sp.polygons",countriesHigh,fill="grey"),
+         list("sp.lines",rasterToContour(raster(depth.pixel_on_sed.pixel),
+                                          levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
+              ),
+         list("sp.points",mgsPA.bind_onlyPA2,cex=0.1,col=c("blue","green"))
        )
-
+)
+grid.text("probability",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+grid.legend()
+arrow
 ```
 
 
