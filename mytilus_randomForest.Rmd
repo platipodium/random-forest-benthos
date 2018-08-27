@@ -60,7 +60,7 @@ library(RColorBrewer)
 library(sp)
 spplot(Predictor,"mgs",formula=-log2(mgs/1000)~s1+s2,
       col.regions = terrain.colors(21)[1:20],
-      at=seq(from=-4.181,to=7.788,by=(7.788+4.181)/20),
+      at=seq(from=-4,to=4,by=(7.788+4.181)/20),
       pretty=TRUE,
       main=list(label="Median grain size (mgs)",cex=1),
       scales=list(draw=TRUE)
@@ -78,7 +78,7 @@ library(devtools)
 #devtools::install_github("janhoo/crecs")
 library(crecs)
 ```
-Aus diesem Paket kann der Befehl `get.environ` zu gegebenen Punktdaten (`points`) einen Vektor mit Daten aus der Umgebung (`env`) erzeugen. Die Daten werden auf den Bereich der Korngröße zugeschnitten und nur die Spalten PA, mgs und depth werden behalten
+Aus diesem Paket kann der Befehl `get.environ` zu gegebenen Punktdaten (`points`) einen Vektor mit Daten aus der Umgebung (`env`) erzeugen. Die Daten werden auf den Bereich der Korngröße zugeschnitten und nur die Spalten PA, mgs und depth werden behalten.
 
 ```{r}
 myt.env<-get.environ(points=mytilus.cleaned,env=stack(Predictor))
@@ -88,7 +88,7 @@ myt.env2 <- myt.env2[,c("PA","depth","mgs","phi")]
 summary(myt.env2)
 ```
 
-Man kann nun mit spplot Korngröße und Vorkommen von Mytilus gegenüberstellen.
+Man kann nun mit `spplot` Korngröße und Vorkommen von Mytilus gegenüberstellen.
 ```{r}
 library(rworldxtra)
 data(countriesHigh)
@@ -104,7 +104,7 @@ library(gridExtra)
 grid.arrange(val_plot,PA2_plot,ncol=2)
 ```
 
-Bisher haben wir nur Presence-Daten für Mytilus. Die Punkte, an denen Mytilus nicht vorkommt, müssen erst noch zufällig generiert werden. Die Funktion randomPoints ist genau für solche Fälle gedacht, sie generiert pseudo-absence Daten. Die Anzahl der generierten Punkte soll denen der Presence-Punkte entsprechen. Es sind 1259 Punkte.
+Bisher haben wir nur Presence-Daten für Mytilus. Die Punkte, an denen Mytilus nicht vorkommt, müssen erst noch zufällig generiert werden. Die Funktion `randomPoints` ist genau für solche Fälle gedacht, sie generiert pseudo-absence Daten. Die Anzahl der generierten Punkte soll denen der Presence-Punkte entsprechen. Es sind 1259 Punkte.
 
 ```{r}
 set.seed(1)
@@ -132,7 +132,7 @@ spplot(sedPA.bind,"PA2",cex=0.5,col.regions=c("black","red"),
        )
 ```
 
-Nun kann das Random Forest Modell angewendet werden. Dazu gibt es ein extra Paket 'randomForest', das zuerst geladen werden muss.
+Nun kann das Random Forest Modell angewendet werden. Dazu gibt es ein extra Paket `randomForest`, das zuerst geladen werden muss.
 
 ```{r}
 sedPA.bind <- spRbind(myt.env2[,2:ncol(myt.env2)],myt.absence[,c("depth","mgs","PA2","phi")])
@@ -151,19 +151,59 @@ spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),
 grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 Wie verändert sich das Bild, wenn wir als zweiten Prädiktor die Tiefe mit in das Random Forest Modell hinein nehmen?
+Die Tiefe aus dem Datensatz `Predictor.rda` sieht wie folgt aus.
+```{r}
+Predictor_raster <- raster(Predictor)
+spplot(Predictor,"depth",main=list("Bathymetry",cex=1),
+       col.regions=blues9,
+       at=c(0,5,10,20,30,50,100,200,500),
+       scales=list(draw=TRUE),
+       sp.layout=list(list("sp.polygons",countriesHigh,fill="grey"),
+                      list("sp.lines",rasterToContour(Predictor_raster$depth),
+                           levels=c(-500,-200,-100,-50,-30,-20,-10,-5,0)))
+       )
+grid.text("depth",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+```
+
+Nun kann wieder das Random Forest Modell angewandt werden. Diesmal mit phi und Tiefe als Prädiktoren.
+
 ```{r}
 rf.p.withdepth <- randomForest(PA2~phi+depth,data=sedPA.bind.df,ntree=500)
 sedPA.bind$PredictionWithDepth <- rf.p.withdepth$predicted
 library(dismo)
 Predictor$predictionWithDepth <- predict(rf.p.withdepth,Predictor)
+sedPA.bind_onlyPA <- sedPA.bind.df[,c("PA2","Lon","Lat")]
+coordinates(sedPA.bind_onlyPA) <- ~Lon+Lat
+proj4string(sedPA.bind_onlyPA) <- CRS("+init=epsg:4326")
+#North <- list("SpatialPolygonsRescale",layout.north.arrow(type=1),offset=c(000000,520000))
+#Um Staedte in der Karte abzubilden wird der Datensatz `world.cities` aus dem Paket `maps` verwendet
+cities_subset <- subset(world.cities,world.cities$long>=-2.250885&world.cities$long<=8.714282
+                        &world.cities$lat>=51.062591&world.cities$lat<=55.971701
+                        &(world.cities$pop>=400000|world.cities$capital!=0))
+                        
+cities_subset_spatial <- cities_subset
+coordinates(cities_subset_spatial) <- ~long+lat
+proj4string(cities_subset_spatial) <-  CRS("+init=epsg:4326")
+library(maptools)
+
 spplot(Predictor,"predictionWithDepth",main=list("Occurence probability",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),
+       scales=list(draw=TRUE),
        pretty=TRUE,
        ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
-       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
-       )
+       sp.layout=list(
+         list("sp.polygons",countriesHigh,fill="grey"),
+         list("sp.points",sedPA.bind_onlyPA,cex=0.1,col=c("blue","green")),
+         list("panel.points",cities_subset$long,cities_subset$lat,pch=1),
+         list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8)
+       ))
+
 grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+#grid.points(x=c(0.75,0.8),y=c(0.4,0.4),gp=gpar(c("blue","green")))
+#grid.legend(labels=c("Presence","Absence"),ncol=1)
+grid.text("WGS84",x=unit(0.8,"npc"),y=unit(0.1,"npc"))
+
 ```
 
 # Korngröße (Teil 2)
@@ -189,10 +229,12 @@ Die Daten sind klassifizierte Punkdaten, die in ein kontinuierliches Raster umge
 
 ```{r}
 sed.pixel=SpatialPixelsDataFrame(sed2,data=sed,tolerance=0.000100658)
+depth.pixel_on_sed.pixel <- readRDS("etopo1_interpolated_to_noah_grainsize_grid.rda")
 spplot(sed.pixel,"val", cex=0.1,
        main=list("Median grain size (mgs)",cex=1),
        col.regions=terrain.colors(21)[1:20],
        at=seq(from=-4,to=4,by=8/20),
+       scales=list(draw=TRUE),
        ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
        sp.layout=list(
          list("sp.polygons",countriesHigh,fill="grey"),
@@ -356,8 +398,6 @@ spplot(depth.pixel_on_sed.pixel,"prediction",
        )
 )
 grid.text("probability",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
-grid.legend()
-arrow
 ```
 
 
