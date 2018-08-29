@@ -17,7 +17,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Der Mytilus-Datensatz enthält ungefähr 30000 Positionen von positivem Vorkommen der Miesmuschel.  Diese werden aus einer `CSV` ("character-separated-value")-Datei gelesen. Offenbar kann man in diesem Fall nicht die Funktion read.table anwenden, da dadurch etwa 2800 Zeilen nicht eingelesen werden. Stattdessen kann die Funktion read.csv angewendet werden.
 
-```{r}
+```{r read Mytilus data}
 #mytilus <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".")
 mytilus <- read.csv("Mytilus_SNS4_AP.csv",sep=";")
 summary(mytilus)
@@ -177,6 +177,7 @@ coordinates(sedPA.bind_onlyPA) <- ~Lon+Lat
 proj4string(sedPA.bind_onlyPA) <- CRS("+init=epsg:4326")
 #North <- list("SpatialPolygonsRescale",layout.north.arrow(type=1),offset=c(000000,520000))
 #Um Staedte in der Karte abzubilden wird der Datensatz `world.cities` aus dem Paket `maps` verwendet
+library(maps)
 cities_subset <- subset(world.cities,world.cities$long>=-2.250885&world.cities$long<=8.714282
                         &world.cities$lat>=51.062591&world.cities$lat<=55.971701
                         &(world.cities$pop>=400000|world.cities$capital!=0))
@@ -184,9 +185,9 @@ cities_subset <- subset(world.cities,world.cities$long>=-2.250885&world.cities$l
 cities_subset_spatial <- cities_subset
 coordinates(cities_subset_spatial) <- ~long+lat
 proj4string(cities_subset_spatial) <-  CRS("+init=epsg:4326")
-library(maptools)
+library(maptools) #wird benötigt für sp.pointLabel
 
-spplot(Predictor,"predictionWithDepth",main=list("Occurence probability",cex=1),
+plot_mytilusoccurence_withdepthmgs <- spplot(Predictor,"predictionWithDepth",main=list("Occurence probability",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),
        scales=list(draw=TRUE),
@@ -195,14 +196,14 @@ spplot(Predictor,"predictionWithDepth",main=list("Occurence probability",cex=1),
        sp.layout=list(
          list("sp.polygons",countriesHigh,fill="grey"),
          list("sp.points",sedPA.bind_onlyPA,cex=0.1,col=c("blue","green")),
-         list("panel.points",cities_subset$long,cities_subset$lat,pch=1),
+         list("panel.points",cities_subset$long,cities_subset$lat,pch=20),
          list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8)
        ))
-
+plot_mytilusoccurence_withdepthmgs
 grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 #grid.points(x=c(0.75,0.8),y=c(0.4,0.4),gp=gpar(c("blue","green")))
 #grid.legend(labels=c("Presence","Absence"),ncol=1)
-grid.text("WGS84",x=unit(0.8,"npc"),y=unit(0.1,"npc"))
+grid.text("WGS84",x=unit(0.2,"npc"),y=unit(0.2,"npc"))
 
 ```
 
@@ -288,6 +289,7 @@ spplot(mgsPA.bind,"PA2",cex=0.5,col.regions=c("black","red"),
        scales=list(draw=TRUE)
        )
 mgsPA.bind <- spRbind(myt.env[,3:ncol(myt.env)],sed.absence)
+#saveRDS(object=mgsPAbind,file="presence_randomabsence_data.rds")
 ```
 Mithilfe des Random Forest Modells sollen Vorhersagen über die Wahrscheinlichkeit gemacht werden, mit der die Miesmuschel bei gegebener mittlerer Korngröße vorkommt. Die mittlere Korngröße ist somit der Prädiktor im Modell, das Vorkommen der Miesmuschel die Response-Variable.
 
@@ -328,18 +330,18 @@ water_color <-  topo.colors(32)[1:11]
 land_color <- topo.colors(32)[13:32]
 spplot(depth.pixel,"V3",
        main=list("Bathymetry",cex=1),
-       col.regions=c(water_color,land_color),
-       at=c(seq(from=-1547.00,to=0,by=1550/11),seq(0,1626.00,by=1626/20)),
+       col.regions=rev(blues9),
+       at=c(0,-5,-10,-20,-30,-50,-100,-200,-500),
        scales=list(draw=TRUE)
        )
-grid.text("depth [m]",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+grid.text("-depth [m]",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 Mit der 'get.environ' Funktion lassen sich dann die Werte jener Punkte extrahieren f?r die auch Grainsize und PA-Werte vorliegen.
 
 ```{r}
 mgsDepthPA <- get.environ(mgsPA.bind,stack(depth.pixel))
 mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
-
+#saveRDS(object=mgsDepthPA,file="pointdata_Mytilus_depth_mgs.rds")
 spplot(mgsDepthPA,"V3",cex=0.5,
        main=list("Median grain size",cex=1),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey"),
@@ -380,6 +382,7 @@ grid.text("depth (m)",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overla
 ```{r}
 depth.pixel_on_sed.pixel$val <- sed.pixel$val
 depth.pixel_on_sed.pixel$V3 <- depth.pixel_on_sed.pixel$var1.pred
+#saveRDS(object=depth.pixel_on_sed.pixel,file="depth_mgs_pixel")
 depth.pixel_on_sed.pixel$prediction <- predict(rf.withDepth,depth.pixel_on_sed.pixel)
 mgsPA.bind_onlyPA2 <- mgsPA.bind[,c(1,2,4)] 
 spplot(depth.pixel_on_sed.pixel,"prediction",
@@ -394,7 +397,8 @@ spplot(depth.pixel_on_sed.pixel,"prediction",
          list("sp.lines",rasterToContour(raster(depth.pixel_on_sed.pixel),
                                           levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
               ),
-         list("sp.points",mgsPA.bind_onlyPA2,cex=0.1,col=c("blue","green"))
+         list("sp.points",mgsPA.bind_onlyPA2,cex=0.1,col=c("blue","green")),
+         list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8)
        )
 )
 grid.text("probability",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
@@ -408,9 +412,38 @@ Um die Ergebnisse der beiden Korngrößen-Datensätze besser vergleichen zu kön
 ```{r}
 library(raster)
 intersect.part2 <- intersect(sed.pixel,Predictor)
-grainsize.part2 <- spplot(intersect.part2,"prediction")
-intersect.part1 <- intersect(Predictor,sed.pixel)
-grainsize.part1 <- spplot(intersect.part1,"prediction1")
-grainsize.part1
-grainsize.part2
+#Korngroesse 1 als Prädiktor
+spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),
+       col.regions = brewer.pal(9,"OrRd"),
+       at=seq(from=0,to=1,by=1/9),pretty=TRUE, 
+       ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+      )
+#Korngroesse 2 als Prädiktor
+spplot(intersect.part2,"prediction",main=list("Occurence probability",cex=1),
+       col.regions = brewer.pal(9,"OrRd"),
+       at=seq(from=0,to=1,by=1/9),
+       scales=list(draw=TRUE),
+       ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
+       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       )
+#Korngroesse 1 und Tiefe als Prädiktoren
+plot_mytilusoccurence_withdepthmgs
+#Korngroesse 2 und Tiefe als Prädiktoren
+intersect.part2.withdepth <- intersect(depth.pixel_on_sed.pixel,Predictor)
+spplot(intersect.part2.withdepth,"prediction",main=list("Occurence probability",cex=1),
+       col.regions=brewer.pal(9,"OrRd"),at=seq(from=0,to=1,by=1/9),
+       scales=list(draw=TRUE),
+       sp.layout=list(
+         list("SpatialPolygonsRescale", layout.north.arrow(),   offset = c(178750,332500), scale = 400),
+         list("SpatialPolygonsRescale",layout.scale.bar(),offset = c(40000, 540000), scale = 500, 
+              fill=c("transparent","black")),
+         list("sp.polygons",countriesHigh,fill="grey"),
+         list("sp.lines",rasterToContour(raster(depth.pixel_on_sed.pixel),
+                                          levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
+              ),
+         list("sp.points",mgsPA.bind_onlyPA2,cex=0.1,col=c("blue","green")),
+         list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8)
+       )
+)
 ```
