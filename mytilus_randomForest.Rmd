@@ -17,7 +17,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Der Mytilus-Datensatz enthält ungefähr 30000 Positionen von positivem Vorkommen der Miesmuschel.  Diese werden aus einer `CSV` ("character-separated-value")-Datei gelesen. Offenbar kann man in diesem Fall nicht die Funktion read.table anwenden, da dadurch etwa 2800 Zeilen nicht eingelesen werden. Stattdessen kann die Funktion read.csv angewendet werden.
 
-```{r read Mytilus data}
+```{r einlesen der Mytilus Daten}
 #mytilus <- read.table("Mytilus_SNS4_AP.csv",header=T,sep=";",dec=".")
 mytilus <- read.csv("Mytilus_SNS4_AP.csv",sep=";")
 summary(mytilus)
@@ -25,7 +25,7 @@ summary(mytilus)
 
 Die Daten müssen noch gereinigt werden, d.h.  auf fehlerhafte Koordinaten, Duplikate und nicht-Mytilus Angaben überprüft werden. Die Mittelmeer-Miesmuschel soll ebenfalls ausgeschlossen werden. Außerdem behalten wir nur die Presence-Werte. 
 
-```{r}
+```{r Mytilus Daten bereinigen}
 mytilus.valid = subset(mytilus, 
   !is.na(mytilus$Lat) & 
   !is.na(mytilus$Lon) &
@@ -42,7 +42,7 @@ summary(mytilus.cleaned)
 Wir benutzen den Dataframe jetzt als spatial data und reichern es mit
 Information zu Koordinaten und Referenzsystem aus dem `sp`-Paket an:
 
-```{r}
+```{r plotten der bereinigten Mytilus Punktdaten}
 library(sp)
 coordinates(mytilus.cleaned) <- ~Lon + Lat
 proj4string(mytilus.cleaned)<-CRS("+init=epsg:4326")
@@ -51,10 +51,28 @@ spplot(mytilus.cleaned,"PA",cex=0.1,col.regions=c("red","black"),scales=list(dra
 
 # Korngröße (Teil 1)
 
-Die Sedimentdaten sind in zwei Versionen vorhanden, einmal in der Datei `
-Predictor.rda` und in einer weiteren Datei `interpolated_d50_NorthSea_1nm.txt`. Hier der Versuch mit der ersten (später besser die zweite nehmen, s.u.).  Die Rohdaten sind Mittlere Korngröße ("median grain size", mgs), und werden in der Krumbein-Phi-Skala dargestellt, d.h. den negativen binären Logarithmus der auf 1 mm normierten Korngröße. 
+Im weiteren Verlauf werden den erzeugten Karten die Länderumrisse und Städtenamen stets hinzugefügt, weshalb wir zur Verkürzung des Codes folgende Zuweisungen vornehmen. Die Funktion `countriesHigh`stammt aus dem Paket `rworldxtra` und enthält eine hochauflösende Weltkarte mit den Ländergrenzen.
+```{r Zuweisung Länderumrisse}
+library(rworldxtra)
+data(countriesHigh)
+shape_countries <- list("sp.polygons",countriesHigh,fill="grey")
+```
+Um die Städtenamen der Karte hinzuzufügen, wird der Datensatz `world.cities` aus dem Paket `maps` verwendet. Dabei werden nur jene ausgewählt, die innerhalb unserer Kartenausschnitte fallen, große Städte sowie Hauptstädte. Außerdem wird das Paket `maptools` für `sp.pointLabel` benötigt.
+```{r Zuweisung Städtenamen}
+library(maps)
+library(maptools)
+cities_subset <- subset(world.cities,world.cities$long>=-2.250885&world.cities$long<=11.51189
+                        &world.cities$lat>=50.91667&world.cities$lat<=61.00000
+                        &(world.cities$pop>=400000|world.cities$capital!=0))
+cities_subset_spatial <- cities_subset
+coordinates(cities_subset_spatial) <- ~long+lat
+proj4string(cities_subset_spatial) <-  CRS("+init=epsg:4326")
+draw_cities <- list(list("panel.points",cities_subset$long,cities_subset$lat,pch=20,col="red"),
+                    list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8))
+```
+Die Sedimentdaten sind in zwei Versionen vorhanden, einmal in der Datei `Predictor.rda` und in einer weiteren Datei `interpolated_d50_NorthSea_1nm.txt`. Hier der Versuch mit der ersten (später besser die zweite nehmen, s.u.).  Die Rohdaten sind Mittlere Korngröße ("median grain size", mgs), und werden in der Krumbein-Phi-Skala dargestellt, d.h. den negativen binären Logarithmus der auf 1 mm normierten Korngröße. 
 
-```{r}
+```{r Predictor.rda Datei lesen und Median Grain Size als phi plotten}
 load("Predictor.rda")
 library(RColorBrewer)
 library(sp)
@@ -63,7 +81,8 @@ spplot(Predictor,"mgs",formula=-log2(mgs/1000)~s1+s2,
       at=seq(from=-4,to=4,by=(7.788+4.181)/20),
       pretty=TRUE,
       main=list(label="Median grain size (mgs)",cex=1),
-      scales=list(draw=TRUE)
+      scales=list(draw=TRUE),
+      sp.layout=list(shape_countries,draw_cities)
       )
 library(grid)
 grid.text("phi=-log2(mgs/1mm)",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
@@ -73,14 +92,14 @@ Predictor$phi <- -log2(Predictor$mgs/1000)
 
 Die entscheinden Schritte, um die Umweltdaten mit den Muscheldaten zusammenzubringen, benötigen das Paket `crecs` von `github`.  Dieses muss mithilfe der `devtools` installiert werden.
 
-```{r}
+```{r Paket crecs laden}
 library(devtools)
 #devtools::install_github("janhoo/crecs")
 library(crecs)
 ```
 Aus diesem Paket kann der Befehl `get.environ` zu gegebenen Punktdaten (`points`) einen Vektor mit Daten aus der Umgebung (`env`) erzeugen. Die Daten werden auf den Bereich der Korngröße zugeschnitten und nur die Spalten PA, mgs und depth werden behalten.
 
-```{r}
+```{r Anwendung get.environ}
 myt.env<-get.environ(points=mytilus.cleaned,env=stack(Predictor))
 #clip the points to SNS
 myt.env2<-myt.env[!is.na(myt.env$phi),]
@@ -89,24 +108,22 @@ summary(myt.env2)
 ```
 
 Man kann nun mit `spplot` Korngröße und Vorkommen von Mytilus gegenüberstellen.
-```{r}
-library(rworldxtra)
-data(countriesHigh)
+```{r Punktdaten Mytilus und Korngröße plotten}
 PA2_plot <- spplot(myt.env2,"PA",cex=0.5,col.regions=c("black","red"),
                    main=list(label="Point data Mytilus",cex=1),
                    ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
-                   sp.layout=list("sp.polygons",countriesHigh,fill="grey"))
+                   sp.layout=shape_countries)
 val_plot <- spplot(myt.env2,"phi",cex=0.5,
                    main=list(label="Point data median grain size",cex=1),
                    ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
-                   sp.layout=list("sp.polygons",countriesHigh,fill="grey"))
+                   sp.layout=shape_countries)
 library(gridExtra)
 grid.arrange(val_plot,PA2_plot,ncol=2)
 ```
 
-Bisher haben wir nur Presence-Daten für Mytilus. Die Punkte, an denen Mytilus nicht vorkommt, müssen erst noch zufällig generiert werden. Die Funktion `randomPoints` ist genau für solche Fälle gedacht, sie generiert pseudo-absence Daten. Die Anzahl der generierten Punkte soll denen der Presence-Punkte entsprechen. Es sind 1259 Punkte.
+Bisher haben wir nur Presence-Daten für Mytilus. Die Punkte, an denen Mytilus nicht vorkommt, müssen erst noch zufällig generiert werden. Die Funktion `randomPoints` aus dem Paket `dismo` ist genau für solche Fälle gedacht, sie generiert pseudo-absence Daten. Die Anzahl der generierten Punkte soll denen der Presence-Punkte entsprechen. Es sind 1259 Punkte.
 
-```{r}
+```{r random absence Punkte erzeugen und plotten}
 set.seed(1)
 library(dismo)
 random.absence.forPredictor <- randomPoints(Predictor,n=1259,mytilus.cleaned)
@@ -134,31 +151,31 @@ spplot(sedPA.bind,"PA2",cex=0.5,col.regions=c("black","red"),
 
 Nun kann das Random Forest Modell angewendet werden. Dazu gibt es ein extra Paket `randomForest`, das zuerst geladen werden muss.
 
-```{r}
+```{r randomForest mit Prädiktor mgs; plotten}
 sedPA.bind <- spRbind(myt.env2[,2:ncol(myt.env2)],myt.absence[,c("depth","mgs","PA2","phi")])
 sedPA.bind.df <- data.frame(sedPA.bind)
 library(randomForest)
 rf.p <- randomForest(PA2~phi,data=sedPA.bind.df,ntree=500)
 sedPA.bind$Prediction <- rf.p$predicted
-library(dismo)
+
 Predictor$prediction1 <- predict(rf.p,Predictor)
 spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),pretty=TRUE, 
        ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
-       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       sp.layout=shape_countries
       )
 grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 Wie verändert sich das Bild, wenn wir als zweiten Prädiktor die Tiefe mit in das Random Forest Modell hinein nehmen?
 Die Tiefe aus dem Datensatz `Predictor.rda` sieht wie folgt aus.
-```{r}
+```{r plotten der Tiefendaten}
 Predictor_raster <- raster(Predictor)
 spplot(Predictor,"depth",main=list("Bathymetry",cex=1),
        col.regions=blues9,
        at=c(0,5,10,20,30,50,100,200,500),
        scales=list(draw=TRUE),
-       sp.layout=list(list("sp.polygons",countriesHigh,fill="grey"),
+       sp.layout=list(shape_countries,
                       list("sp.lines",rasterToContour(Predictor_raster$depth),
                            levels=c(-500,-200,-100,-50,-30,-20,-10,-5,0)))
        )
@@ -167,7 +184,7 @@ grid.text("depth",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = 
 
 Nun kann wieder das Random Forest Modell angewandt werden. Diesmal mit phi und Tiefe als Prädiktoren.
 
-```{r}
+```{r randomForest mit Prädiktoren mgs und depth; plotten}
 rf.p.withdepth <- randomForest(PA2~phi+depth,data=sedPA.bind.df,ntree=500)
 sedPA.bind$PredictionWithDepth <- rf.p.withdepth$predicted
 library(dismo)
@@ -177,14 +194,7 @@ coordinates(sedPA.bind_onlyPA) <- ~Lon+Lat
 proj4string(sedPA.bind_onlyPA) <- CRS("+init=epsg:4326")
 #North <- list("SpatialPolygonsRescale",layout.north.arrow(type=1),offset=c(000000,520000))
 #Um Staedte in der Karte abzubilden wird der Datensatz `world.cities` aus dem Paket `maps` verwendet
-library(maps)
-cities_subset <- subset(world.cities,world.cities$long>=-2.250885&world.cities$long<=8.714282
-                        &world.cities$lat>=51.062591&world.cities$lat<=55.971701
-                        &(world.cities$pop>=400000|world.cities$capital!=0))
-                        
-cities_subset_spatial <- cities_subset
-coordinates(cities_subset_spatial) <- ~long+lat
-proj4string(cities_subset_spatial) <-  CRS("+init=epsg:4326")
+
 library(maptools) #wird benötigt für sp.pointLabel
 
 plot_mytilusoccurence_withdepthmgs <- spplot(Predictor,"predictionWithDepth",main=list("Occurence probability",cex=1),
@@ -203,7 +213,7 @@ plot_mytilusoccurence_withdepthmgs
 grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 #grid.points(x=c(0.75,0.8),y=c(0.4,0.4),gp=gpar(c("blue","green")))
 #grid.legend(labels=c("Presence","Absence"),ncol=1)
-grid.text("WGS84",x=unit(0.2,"npc"),y=unit(0.2,"npc"))
+grid.text("EPGS:4326",x=unit(0.2,"npc"),y=unit(0.2,"npc"))
 
 ```
 
@@ -211,7 +221,7 @@ grid.text("WGS84",x=unit(0.2,"npc"),y=unit(0.2,"npc"))
 
 Die zweiten Sedimentdaten aus `interpolated_d50_NorthSea_1nm.txt` liegen schon als phi-Werte vor.  Diese können ordentlich referenziert werden, denn sie stammen  aus dem [NOAH Habitatatlas](www.noah-project.de).
 
-```{r}
+```{r phi plotten}
 sed <- read.table("interpolated_d50_NorthSea_1nm.txt",header=T,dec=".")
 sed <- sed[,1:3]
 summary(sed)
@@ -228,7 +238,7 @@ spplot(sed2,"val",cex=0.1,col.regions=terrain.colors(6)[1:5],
 Die Daten sind klassifizierte Punkdaten, die in ein kontinuierliches Raster umgewandelt werden sollen. Die angegebene Wert für tolerance ist der von R vorgeschlagene Wert. Die Angabe des Wertes ist nötig, da die Daten nicht komplett gegridded sind. 
 
 
-```{r}
+```{r Umwandlung von phi in SpatialPixelsDataFrame und plotten}
 sed.pixel=SpatialPixelsDataFrame(sed2,data=sed,tolerance=0.000100658)
 depth.pixel_on_sed.pixel <- readRDS("etopo1_interpolated_to_noah_grainsize_grid.rda")
 spplot(sed.pixel,"val", cex=0.1,
@@ -249,7 +259,7 @@ grid.text("phi (-log 2 mgs/1mm)",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,c
 
 Die Mytilus- und die Korngrößen-Daten werden nun zusammengeführt und auf den gemeinsamen Bereich zugeschnitten. Damit reduziert sich die Anzahl der Punkte auf 1396.
 
-```{r}
+```{r get.environ - Korgrößenwerte an Mytiluspunkten}
 library(crecs)
 myt.env<-get.environ(points=mytilus.cleaned,env=stack(sed.pixel))
 myt.env <- myt.env[!is.na(myt.env$val),]
@@ -258,7 +268,7 @@ summary(myt.env)
 
 Es sollen nun 1396 Hintergrundwerte, an denen die Miesmuschel nicht vorkommt, zufällig generiert werden (random-absence). Dies geschieht mit der Funktion randomPoints, die eine Matrix mit x und y Werten erzeugt. Als letztes Argument sind hier die Presence-Punkte angegeben. Dann werden die Zufallswerte nicht in diesen Zellen generiert.
 
-```{r}
+```{r erzeugen von random absence Punkten}
 set.seed(1)
 library(dismo)
 random.absence <- randomPoints(sed.pixel,n=1396,mytilus.cleaned)
@@ -266,7 +276,7 @@ random.absence <- randomPoints(sed.pixel,n=1396,mytilus.cleaned)
 
 Die Matrix soll in einen SpatialPoints Datensatz umgewandelt werden und bekommt damit einen räumlichen Bezug. Anschließend werden die Absence-Punktdaten mit den Korngrößen-Daten vereint.
 
-```{r}
+```{r Korngröße mit absence Punkten vereinen}
 random.absence <- as.data.frame(random.absence)
 coordinates(random.absence) <- ~ x+y
 proj4string(random.absence) <- CRS("+init=epsg:4326")
@@ -276,7 +286,7 @@ sed.absence <- get.environ(random.absence,stack(sed.pixel))
 
 Die Presence-Punktdaten und die generierten Absence-Punktdaten werden jetzt mit einander verbunden. Es wird eine neue Spalte PA2 angelegt, in der das Vorkommen von Mytilus als 1 und die Abwesenheit von Mytilus als 0 definiert wird.
 
-```{r}
+```{r verbinden von absence und presence Punkten; plotten}
 myt.env$PA2 <- 1
 sed.absence$PA2 <- 0
 library(maptools)
@@ -293,7 +303,7 @@ mgsPA.bind <- spRbind(myt.env[,3:ncol(myt.env)],sed.absence)
 ```
 Mithilfe des Random Forest Modells sollen Vorhersagen über die Wahrscheinlichkeit gemacht werden, mit der die Miesmuschel bei gegebener mittlerer Korngröße vorkommt. Die mittlere Korngröße ist somit der Prädiktor im Modell, das Vorkommen der Miesmuschel die Response-Variable.
 
-```{r}
+```{r randomForest mit Prädiktor phi; plotten}
 mgsPA.bind.df <- data.frame(mgsPA.bind)
 library(randomForest)
 rf <- randomForest(PA2~val,data=mgsPA.bind.df,ntree=500)
@@ -313,7 +323,7 @@ grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.over
 
 Wie ver?ndert sich das Bild, wenn man als zweiten Pr?diktor die Tiefe mit einbezieht? Wir verwenden den Etopo1 Datensatz, der unter https://maps.ngdc.noaa.gov/viewers/wcs-client/ abbrufbar ist. 
 Die Daten werden eingelesen und durch Zuweisung des Referenz-Koordinaten-Systems und der Koordinaten in einen SpatialPointsDataFrame umgewandelt.
-```{r}
+```{r Tiefendaten in SpatialPointsDataFrame umwandeln}
   #Einlesen der Tiefendaten und Umwandlung in SpatialPointsDataFrame
 depth.etopo.df <- read.csv("etopo1_bedrock.xyz",sep="",header=FALSE)
 depth.etopo <- depth.etopo.df 
@@ -322,7 +332,7 @@ proj4string(depth.etopo)<-CRS("+init=epsg:4326")
 ```
 
 Der Datensatz l?sst sich anschlie?end ohne Weiteres in einen SpatialPixelsDataFrame ?berf?hren
-```{r}
+```{r Tiefendaten in SpatialPixelsDataFrame umwandeln; plotten}
   #Umwandlung der Tiefendaten in SpatialPixelsDataFrame
 depth.pixel <- SpatialPixelsDataFrame(depth.etopo,depth.etopo.df)
 library(grDevices)
@@ -334,11 +344,11 @@ spplot(depth.pixel,"V3",
        at=c(0,-5,-10,-20,-30,-50,-100,-200,-500),
        scales=list(draw=TRUE)
        )
-grid.text("-depth [m]",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+grid.text("-depth (m)",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 Mit der 'get.environ' Funktion lassen sich dann die Werte jener Punkte extrahieren f?r die auch Grainsize und PA-Werte vorliegen.
 
-```{r}
+```{r Tiefendatenpunkte an PA-Punkten extrahieren; plotten von mgs}
 mgsDepthPA <- get.environ(mgsPA.bind,stack(depth.pixel))
 mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
 #saveRDS(object=mgsDepthPA,file="pointdata_Mytilus_depth_mgs.rds")
@@ -352,12 +362,12 @@ spplot(mgsDepthPA,"V3",cex=0.5,
 
 
 Nun kann man das Random Forest Modell erneut anwenden mit Grainsize und Tiefe als Pr?diktoren.
-```{r}
+```{r randomForest mit Prädiktoren phi und Tiefe}
 rf.withDepth <- randomForest(PA2~ val+V3,mgsDepthPA)
 ```
 
 Um jedoch die Vorhersagewerte als SpatialPixelsDataFrame zu erhalten und abbilden zu k?nnen, m?ssen zur Anwendung der Funktion `predict` Korngr??e und Tiefe gemeinsam in einem SpatialPixelsDataFrame vorliegen und als zweites Argument der Funktion 'predict' angegeben werden. Das Kombinieren stellt sich allerdings auch wegen unterschiedlicher cellsize als nicht so einfach heraus. Wir benötigen einen neuen SpatialPixelDataFrame, der Tiefe und Korngröße auf einem einheitlichen Gitter abbildet. Wir versuchen die Tiefeninformation auf das Korngrößengitter zu interpolieren. Danach kann `predict` angewendet werden.
-```{r}
+```{r kriging und Tiefe plotten}
 library(gstat)
 # Uncomment to redo the interpolation, which takes about 1 day to compute
 # better to read the produced interpolated data from file
@@ -379,7 +389,7 @@ spplot(depth.pixel_on_sed.pixel,"var1.pred",formula=-var1.pred~lon+lat,
 grid.text("depth (m)",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 
-```{r}
+```{r predict; plotten der occurence probability (mgs,depth)}
 depth.pixel_on_sed.pixel$val <- sed.pixel$val
 depth.pixel_on_sed.pixel$V3 <- depth.pixel_on_sed.pixel$var1.pred
 #saveRDS(object=depth.pixel_on_sed.pixel,file="depth_mgs_pixel")
@@ -398,6 +408,7 @@ spplot(depth.pixel_on_sed.pixel,"prediction",
                                           levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
               ),
          list("sp.points",mgsPA.bind_onlyPA2,cex=0.1,col=c("blue","green")),
+         list("panel.points",cities_subset$long,cities_subset$lat,pch=20),
          list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8)
        )
 )
@@ -409,14 +420,14 @@ grid.text("probability",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.over
 
 Um die Ergebnisse der beiden Korngrößen-Datensätze besser vergleichen zu können, werden sie auf den gemeinsamen Kartenausschnitt zugeschnitten. Dazu wird die Funktion 'intersect' aus dem Paket 'raster' verwendet.
 
-```{r}
+```{r plotten aller Ergebnisse zur occurence probability}
 library(raster)
 intersect.part2 <- intersect(sed.pixel,Predictor)
 #Korngroesse 1 als Prädiktor
 spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),pretty=TRUE, 
-       ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
+       ylim=c(51.062591,55.971701),xlim=c(-2.250885,10.5),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey")
       )
 #Korngroesse 2 als Prädiktor
@@ -424,7 +435,7 @@ spplot(intersect.part2,"prediction",main=list("Occurence probability",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),
        scales=list(draw=TRUE),
-       ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
+       ylim=c(51.062591,55.971701),xlim=c(-2.250885,10.5),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey")
        )
 #Korngroesse 1 und Tiefe als Prädiktoren
@@ -435,6 +446,9 @@ spplot(intersect.part2.withdepth,"prediction",main=list("Occurence probability",
        col.regions=brewer.pal(9,"OrRd"),at=seq(from=0,to=1,by=1/9),
        scales=list(draw=TRUE),
        sp.layout=list(
+          list("SpatialPolygonsRescale",layout.scale.bar(),offset = c(40000, 540000), scale = 500, 
+              fill=c("transparent","black")),
+         list("sp.text",loc=c(520000,000000),"EPGS:4326"),
          list("SpatialPolygonsRescale", layout.north.arrow(),   offset = c(178750,332500), scale = 400),
          list("SpatialPolygonsRescale",layout.scale.bar(),offset = c(40000, 540000), scale = 500, 
               fill=c("transparent","black")),
@@ -443,7 +457,9 @@ spplot(intersect.part2.withdepth,"prediction",main=list("Occurence probability",
                                           levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
               ),
          list("sp.points",mgsPA.bind_onlyPA2,cex=0.1,col=c("blue","green")),
+         list("panel.points",cities_subset$long,cities_subset$lat,pch=20,col="red"),
          list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8)
+         
        )
 )
 ```
