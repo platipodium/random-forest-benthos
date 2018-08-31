@@ -2,6 +2,7 @@
 #author: "Charlotte Schramm"
 #copyright: "Helmholtz-Zentrum Geesthacht, 2018"
 #date: "Aug 29, 2018"
+#license: This report is released  under the CC-by-SA 4.0 license.
 
 
 library(stats)
@@ -19,7 +20,7 @@ pointdata_Mytilus_depth_mgs <- readRDS("pointdata_Mytilus_depth_mgs.rds")
 glm_quasibinomial <- glm(PA2~ val+V3,pointdata_Mytilus_depth_mgs,family="quasibinomial") #da Anteilsdaten?
 glm_quasibinomial_mgs <- glm(PA2~ val,pointdata_Mytilus_depth_mgs,family="quasibinomial") #nur phi als Prädiktor
 #Vorhersagen
-predict_glm_2predictors <- predict.glm(object=glm_quasibinomial,newdata=depth_mgs_pixel,type="response")
+predict_glm_2predictors <- predict(glm_quasibinomial,depth_mgs_pixel)
 predict_glm_1predictor <- predict.glm(object=glm_quasibinomial_mgs,newdata=depth_mgs_pixel,type="response")
 depth_mgs_pixel_df <- data.frame(depth_mgs_pixel)
 predicted_2predictors <- cbind(predict_glm_2predictors,depth_mgs_pixel_df$lon,depth_mgs_pixel_df$lat)
@@ -36,6 +37,5 @@ proj4string(predicted_1predictor) <- CRS("+init=epsg:4326")
 predicted_1predictor_plot <- spplot(predicted_1predictor,"predict_glm_1predictor")
 
 library(gridExtra)
-par(mfrow=c(2,2))
 predicted_1predictor_plot
 grid.arrange(depth_plot,mgs_plot,predicted_1predictor_plot,predicted_2predictors_plot,ncol=2)

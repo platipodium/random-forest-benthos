@@ -55,7 +55,9 @@ Im weiteren Verlauf werden den erzeugten Karten die Länderumrisse und Städtena
 ```{r Zuweisung Länderumrisse}
 library(rworldxtra)
 data(countriesHigh)
-shape_countries <- list("sp.polygons",countriesHigh,fill="grey")
+shape_countries <- list(list("sp.polygons",countriesHigh,fill="grey")
+                        #list("polygonsLabel",countriesHigh,label=countriesHigh$NAME)
+                        )
 ```
 Um die Städtenamen der Karte hinzuzufügen, wird der Datensatz `world.cities` aus dem Paket `maps` verwendet. Dabei werden nur jene ausgewählt, die innerhalb unserer Kartenausschnitte fallen, große Städte sowie Hauptstädte. Außerdem wird das Paket `maptools` für `sp.pointLabel` benötigt.
 ```{r Zuweisung Städtenamen}
@@ -206,7 +208,7 @@ plot_mytilusoccurence_withdepthmgs <- spplot(Predictor,"predictionWithDepth",mai
        sp.layout=list(
          list("sp.polygons",countriesHigh,fill="grey"),
          list("sp.points",sedPA.bind_onlyPA,cex=0.1,col=c("blue","green")),
-         list("panel.points",cities_subset$long,cities_subset$lat,pch=20),
+         list("panel.points",cities_subset$long,cities_subset$lat,pch=20,col="red"),
          list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8)
        ))
 plot_mytilusoccurence_withdepthmgs
@@ -353,9 +355,9 @@ mgsDepthPA <- get.environ(mgsPA.bind,stack(depth.pixel))
 mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
 #saveRDS(object=mgsDepthPA,file="pointdata_Mytilus_depth_mgs.rds")
 spplot(mgsDepthPA,"V3",cex=0.5,
-       main=list("Median grain size",cex=1),
+       main=list("Bathymetry",cex=1),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey"),
-       col.regions=terrain.colors(6)[1:5],
+       col.regions=rev(blues9),
        scales=list(draw=TRUE)
        )
 ```
@@ -408,7 +410,7 @@ spplot(depth.pixel_on_sed.pixel,"prediction",
                                           levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
               ),
          list("sp.points",mgsPA.bind_onlyPA2,cex=0.1,col=c("blue","green")),
-         list("panel.points",cities_subset$long,cities_subset$lat,pch=20),
+         list("panel.points",cities_subset$long,cities_subset$lat,pch=20,col="red"),
          list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8)
        )
 )
@@ -427,6 +429,7 @@ intersect.part2 <- intersect(sed.pixel,Predictor)
 spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),pretty=TRUE, 
+       scales=list(draw=TRUE),
        ylim=c(51.062591,55.971701),xlim=c(-2.250885,10.5),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey")
       )
@@ -444,22 +447,48 @@ plot_mytilusoccurence_withdepthmgs
 intersect.part2.withdepth <- intersect(depth.pixel_on_sed.pixel,Predictor)
 spplot(intersect.part2.withdepth,"prediction",main=list("Occurence probability",cex=1),
        col.regions=brewer.pal(9,"OrRd"),at=seq(from=0,to=1,by=1/9),
-       scales=list(draw=TRUE),
+       scales=list(draw=TRUE), #xlim=c(intersect.part2.withdepth@bbox["x","min"]-3,
+                                  #    intersect.part2.withdepth@bbox["x","max"]+3),
        sp.layout=list(
-          list("SpatialPolygonsRescale",layout.scale.bar(),offset = c(40000, 540000), scale = 500, 
+          list("SpatialPolygonsRescale",layout.scale.bar(),offset = c(-2,52), scale = 2, 
               fill=c("transparent","black")),
-         list("sp.text",loc=c(520000,000000),"EPGS:4326"),
+         list("sp.text",loc=c(-1,51.5),"EPGS:4326"),
          list("SpatialPolygonsRescale", layout.north.arrow(),   offset = c(178750,332500), scale = 400),
-         list("SpatialPolygonsRescale",layout.scale.bar(),offset = c(40000, 540000), scale = 500, 
-              fill=c("transparent","black")),
-         list("sp.polygons",countriesHigh,fill="grey"),
+         list("sp.text", c(-2,52.2), "0",cex=0.8), list("sp.text", c(100000,100000), "500 m"),
+         list("sp.polygons",countriesHigh,fill="transparent"),
          list("sp.lines",rasterToContour(raster(depth.pixel_on_sed.pixel),
                                           levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
               ),
          list("sp.points",mgsPA.bind_onlyPA2,cex=0.1,col=c("blue","green")),
-         list("panel.points",cities_subset$long,cities_subset$lat,pch=20,col="red"),
-         list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8)
+         list("panel.points",cities_subset$long,cities_subset$lat,pch=20,col="red")
+         #list("sp.pointLabel",cities_subset_spatial,label=cities_subset$name,cex=0.8)
          
        )
 )
+```
+#Histogramme
+
+Wir wollen Histogramme erstellen zur Tiefe, Korngröße (phi), zu Latitude und Longitude. Und das jeweils nur an den Presence-Punkten, nur an den Absence-Punkten und für den gesamten Vorhersagebereich. Dies machen wir zunächst nur mit dem Korngrößendatensatz 2 (`interpolated_d50_NorthSea_1nm.txt`) und den Tiefendaten aus der etopo1 Datei.
+```{r Histogramme}
+par(mfrow=c(4,3))
+hist_phi_absence <- hist(sed.absence$val,main="phi on absence points")
+hist_phi_presence <- hist(myt.env$val,main="phi on presence points")
+hist_phi_all <- hist(depth.pixel_on_sed.pixel$val,main="phi on whole area")
+
+hist_lat_absence <- hist(sed.absence$lat,main="Latitude on absence points")
+hist_lat_presence <- hist(myt.env$lat,main="Latitude on presence points")
+hist_lat_all <- hist(as.data.frame(depth.pixel_on_sed.pixel)$lat,main="Latitude on whole area")
+
+hist_lon_absence <- hist(sed.absence$lon,main="Longitude on absence points")
+hist_lon_presence <- hist(myt.env$lon,main="Longitude on presence points")
+hist_lon_all <- hist(as.data.frame(depth.pixel_on_sed.pixel)$lon,main="Longitude on whole area")
+
+depth_on_absencepoints <- get.environ(sed.absence,stack(depth.pixel))
+depth_on_absencepoints <- depth_on_absencepoints[!is.na(depth_on_absencepoints$V3),]
+hist_depth_absence <- hist(depth_on_absencepoints$V3,main="Depth on absence points")
+depth_on_presencepoints <- get.environ(myt.env,stack(depth.pixel))
+depth_on_presencepoints <- depth_on_presencepoints[!is.na(depth_on_presencepoints$V3),]
+hist_depth_presence <- hist(depth_on_presencepoints$V3,main="Depth on presence points")
+hist_depth_all <- hist(depth.pixel_on_sed.pixel$V3,main="Depth on whole area") 
+
 ```
