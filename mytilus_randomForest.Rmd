@@ -376,6 +376,8 @@ library(gstat)
 #depth.pixel_on_sed.pixel <- krige(formula=V3~1, locations=depth.pixel,newdata=sed.pixel)
 #saveRDS(depth.pixel_on_sed.pixel,file="etopo1_interpolated_to_noah_grain=size_grid.rda")
 depth.pixel_on_sed.pixel <- readRDS("etopo1_interpolated_to_noah_grainsize_grid.rda")
+depth.pixel_on_sed.pixel$V3 <- depth.pixel_on_sed.pixel$V3*(-1)
+depth.pixel_on_sed.pixel <- subset(depth.pixel_on_sed.pixel,depth.pixel_on_sed.pixel$V3>0)
 spplot(depth.pixel_on_sed.pixel,"var1.pred",formula=-var1.pred~lon+lat,
        main=list("Bathymetry (based on etopo1)",cex=1),
        sp.layout=list(
@@ -466,6 +468,7 @@ spplot(intersect.part2.withdepth,"prediction",main=list("Occurence probability",
        )
 )
 ```
+
 #Histogramme
 
 Wir wollen Histogramme erstellen zur Tiefe, Korngröße (phi), zu Latitude und Longitude. Und das jeweils nur an den Presence-Punkten, nur an den Absence-Punkten und für den gesamten Vorhersagebereich. Dies machen wir zunächst nur mit dem Korngrößendatensatz 2 (`interpolated_d50_NorthSea_1nm.txt`) und den Tiefendaten aus der etopo1 Datei.
@@ -491,4 +494,55 @@ depth_on_presencepoints <- depth_on_presencepoints[!is.na(depth_on_presencepoint
 hist_depth_presence <- hist(depth_on_presencepoints$V3,main="Depth on presence points")
 hist_depth_all <- hist(depth.pixel_on_sed.pixel$V3,main="Depth on whole area") 
 
+
+depth.pixel$log2depth <- log2(depth.pixel$V3)
+
+```
+
+#Punktdaten anderer Arten
+
+Wir wollen das Modell nun auch für andere Arten anwenden, um eine räumliche Vorhersage zu erhalten. Dazu laden wir die NSBP Daten von 2000. Sie enthält Presence-Daten verschiedener Benthos-Arten.
+
+```{r Einlesen der Artendaten}
+species20 <- read.table("24d95cd32941c560d37229523351a898146e5837/24d95cd32941c560d37229523351a898146e5837.csv",header=T,sep=",")
+summary(species20)
+species20 <- species20[c(1:6,11)]
+```
+
+Um einen Überblick darüber zu bekommen, wo Daten erhoben worden sind, plotten wir die Daten.
+```{r}
+plot(species20$decimalLongitude,species20$decimalLatitude,cex=0.5)
+```
+Nun wählen wir nur Abra alba aus, die kleine Pfeffermuschel. Für sie gibt es 77 Punkte mit positivem Vorkommen.
+```{r}
+abra_alba <- subset(species20,species20$scientificName=="Abra alba")
+summary(abra_alba)
+rownames(abra_alba) <- (nrow(abra_alba)+1):(2*nrow(abra_alba)) #Zeilennummern dürfen nicht gleiche Nummern wie spätere random absence Punkte haben!
+coordinates(abra_alba) <- ~decimalLongitude+decimalLatitude
+proj4string(abra_alba) <-  CRS("+init=epsg:4326")
+spplot(abra_alba,"eventDate",sp.layout=list("sp.polygons",countriesHigh,fill="grey"),cex=0.8)
+```
+Zur Anwendung des Random Forest Modells werden die erzeugten Dateien `sed.pixel` und `depth.pixel` und `depth.pixel_on_sed.pixel` verwendet. Das Vorgehen ist das gleiche. Wir erzeugen random absence Punkte und extrahieren für das Modell die Phi und Tiefenwerte an den entsprechenden Punkten. Vorher wollen wir die Daten jedoch auf die südliche Nordsee reduzieren und die Grenzen der Predictor.rda Datei nehmen (Latitude: min 51.062591, max 55.971701).
+```{r}
+sed.pixel.sns <- subset(sed.pixel,sed.pixel$lat>=51.062591&sed.pixel$lat<=55.971701)
+random.absence_alba <- randomPoints(sed.pixel.sns,n=77,p=abra_alba)
+random.absence_alba <- as.data.frame(random.absence_alba)
+random.absence_alba$PA <- 0
+coordinates(random.absence_alba) <- ~ x+y
+proj4string(random.absence_alba) <- CRS("+init=epsg:4326")
+abra_alba$PA <- 1
+PA_points <- spRbind(abra_alba[,6],random.absence_alba)
+PA_points$PA <- as.factor(PA_points$PA)
+spplot(PA_points,"PA",sp.layout=list("sp.polygons",countriesHigh,fill="grey"),cex=0.5,col.regions=c("black","red"))
+PA_points$PA <- as.numeric(PA_points$PA)
+sed_on_PApoints <- get.environ(PA_points,stack(sed.pixel))
+depth_on_sedPApoints <- get.environ(sed_on_PApoints,stack(depth.pixel))
+depth_on_sedPApoints$V3 <- depth_on_sedPApoints$V3*(-1)
+
+#Anwendung randomForest
+rf_abra_alba <- randomForest(PA~val+V3,depth_on_sedPApoints)
+depth.pixel_on_sed.pixel$prediction_abra <- predict(rf_abra_alba,depth.pixel_on_sed.pixel)
+spplot(depth.pixel_on_sed.pixel,"prediction_abra",main=list("Occurence probability Abra alba",cex=1),
+       col.regions=brewer.pal(9,"OrRd"),at=seq(from=0,to=1,by=1/9),
+       scales=list(draw=TRUE))
 ```
