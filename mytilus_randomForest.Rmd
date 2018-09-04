@@ -242,7 +242,7 @@ Die Daten sind klassifizierte Punkdaten, die in ein kontinuierliches Raster umge
 
 ```{r Umwandlung von phi in SpatialPixelsDataFrame und plotten}
 sed.pixel=SpatialPixelsDataFrame(sed2,data=sed,tolerance=0.000100658)
-depth.pixel_on_sed.pixel <- readRDS("etopo1_interpolated_to_noah_grainsize_grid.rda")
+depth.pixel_on_sed.pixel <- readRDS("etopo1_interpolated_to_noah_grainsize_grid.rda") #Datei wird erst im späteren Verlauf erzeugt, wird hier aber schon benötigt um die Konturlinien zu zeichnen.
 spplot(sed.pixel,"val", cex=0.1,
        main=list("Median grain size (mgs)",cex=1),
        col.regions=terrain.colors(21)[1:20],
@@ -337,23 +337,23 @@ Der Datensatz l?sst sich anschlie?end ohne Weiteres in einen SpatialPixelsDataFr
 ```{r Tiefendaten in SpatialPixelsDataFrame umwandeln; plotten}
   #Umwandlung der Tiefendaten in SpatialPixelsDataFrame
 depth.pixel <- SpatialPixelsDataFrame(depth.etopo,depth.etopo.df)
-library(grDevices)
-water_color <-  topo.colors(32)[1:11]
-land_color <- topo.colors(32)[13:32]
+  #Aus diesem Datensatz wollen wir nur die Werte <0 haben und keine Minuszeichen
+depth.pixel$V3 <- depth.pixel$V3*(-1)
+depth.pixel <- subset(depth.pixel,depth.pixel$V3>0)
 spplot(depth.pixel,"V3",
        main=list("Bathymetry",cex=1),
-       col.regions=rev(blues9),
-       at=c(0,-5,-10,-20,-30,-50,-100,-200,-500),
+       col.regions=blues9,
+       at=c(0,5,10,20,30,50,100,200,500),
        scales=list(draw=TRUE)
        )
-grid.text("-depth (m)",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+grid.text("depth (m)",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 Mit der 'get.environ' Funktion lassen sich dann die Werte jener Punkte extrahieren f?r die auch Grainsize und PA-Werte vorliegen.
 
 ```{r Tiefendatenpunkte an PA-Punkten extrahieren; plotten von mgs}
 mgsDepthPA <- get.environ(mgsPA.bind,stack(depth.pixel))
 mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
-#saveRDS(object=mgsDepthPA,file="pointdata_Mytilus_depth_mgs.rds")
+saveRDS(object=mgsDepthPA,file="pointdata_Mytilus_depth_mgs.rds")
 spplot(mgsDepthPA,"V3",cex=0.5,
        main=list("Bathymetry",cex=1),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey"),
@@ -376,14 +376,13 @@ library(gstat)
 #depth.pixel_on_sed.pixel <- krige(formula=V3~1, locations=depth.pixel,newdata=sed.pixel)
 #saveRDS(depth.pixel_on_sed.pixel,file="etopo1_interpolated_to_noah_grain=size_grid.rda")
 depth.pixel_on_sed.pixel <- readRDS("etopo1_interpolated_to_noah_grainsize_grid.rda")
-depth.pixel_on_sed.pixel$V3 <- depth.pixel_on_sed.pixel$V3*(-1)
-depth.pixel_on_sed.pixel <- subset(depth.pixel_on_sed.pixel,depth.pixel_on_sed.pixel$V3>0)
-spplot(depth.pixel_on_sed.pixel,"var1.pred",formula=-var1.pred~lon+lat,
+depth.pixel_on_sed.pixel$var1.pred <- depth.pixel_on_sed.pixel$var1.pred*(-1) #Tiefe soll positive Werte haben
+spplot(depth.pixel_on_sed.pixel,"var1.pred",
        main=list("Bathymetry (based on etopo1)",cex=1),
        sp.layout=list(
          list("sp.polygons",countriesHigh,fill="grey"),
          list("sp.lines", rasterToContour(raster(depth.pixel_on_sed.pixel),
-                                          levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
+                                          levels=c(500,200,100,50,30,20,10.5,0))
               )
        ),
        col.regions=blues9,
@@ -396,7 +395,8 @@ grid.text("depth (m)",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overla
 ```{r predict; plotten der occurence probability (mgs,depth)}
 depth.pixel_on_sed.pixel$val <- sed.pixel$val
 depth.pixel_on_sed.pixel$V3 <- depth.pixel_on_sed.pixel$var1.pred
-#saveRDS(object=depth.pixel_on_sed.pixel,file="depth_mgs_pixel")
+depth.pixel_on_sed.pixel <- subset(depth.pixel_on_sed.pixel,depth.pixel_on_sed.pixel$var1.pred>0) #es sollen nur positive Tiefenwerte genommen werden
+#saveRDS(object=depth.pixel_on_sed.pixel,file="depth_mgs_pixel.rds")
 depth.pixel_on_sed.pixel$prediction <- predict(rf.withDepth,depth.pixel_on_sed.pixel)
 mgsPA.bind_onlyPA2 <- mgsPA.bind[,c(1,2,4)] 
 spplot(depth.pixel_on_sed.pixel,"prediction",
@@ -409,7 +409,7 @@ spplot(depth.pixel_on_sed.pixel,"prediction",
               fill=c("transparent","black")),
          list("sp.polygons",countriesHigh,fill="grey"),
          list("sp.lines",rasterToContour(raster(depth.pixel_on_sed.pixel),
-                                          levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
+                                          levels=c(500,200,100,50,30,20,10,5,0))
               ),
          list("sp.points",mgsPA.bind_onlyPA2,cex=0.1,col=c("blue","green")),
          list("panel.points",cities_subset$long,cities_subset$lat,pch=20,col="red"),
@@ -487,16 +487,23 @@ hist_lon_presence <- hist(myt.env$lon,main="Longitude on presence points")
 hist_lon_all <- hist(as.data.frame(depth.pixel_on_sed.pixel)$lon,main="Longitude on whole area")
 
 depth_on_absencepoints <- get.environ(sed.absence,stack(depth.pixel))
-depth_on_absencepoints <- depth_on_absencepoints[!is.na(depth_on_absencepoints$V3),]
 hist_depth_absence <- hist(depth_on_absencepoints$V3,main="Depth on absence points")
 depth_on_presencepoints <- get.environ(myt.env,stack(depth.pixel))
-depth_on_presencepoints <- depth_on_presencepoints[!is.na(depth_on_presencepoints$V3),]
 hist_depth_presence <- hist(depth_on_presencepoints$V3,main="Depth on presence points")
 hist_depth_all <- hist(depth.pixel_on_sed.pixel$V3,main="Depth on whole area") 
 
-
+par(mfrow=c(1,3))
 depth.pixel$log2depth <- log2(depth.pixel$V3)
-
+logdepth_on_absencepoints <- get.environ(sed.absence,stack(depth.pixel))
+hist_logdepth_absence <- hist(logdepth_on_absencepoints$log2depth,
+                              main="log2 Depth on absence points",breaks=10,xlim=c(0,10)) 
+logdepth_on_presencepoints <- get.environ(myt.env,stack(depth.pixel))
+hist_logdepth_presence <- hist(logdepth_on_presencepoints$log2depth,
+                               main="log2 Depth on presence points",breaks=10,xlim=c(0,10))
+depth.pixel_on_sed.pixel$logdepth <- log2(depth.pixel_on_sed.pixel$V3)
+which(depth.pixel_on_sed.pixel$logdepth<0)
+depth.pixel_on_sed.pixel$logdepth[depth.pixel_on_sed.pixel$logdepth<0] <- 0 #ersetzt bei logarithmierten Tiefe im Datensatz alle Werte die kleiner Null sind durch den Wert Null
+hist_logdepth_all <- hist(depth.pixel_on_sed.pixel$logdepth,main="log2 Depth on whole area",breaks=10,xlim=c(0,10))
 ```
 
 #Punktdaten anderer Arten
