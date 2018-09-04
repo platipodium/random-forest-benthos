@@ -1,27 +1,54 @@
-#title: "Generalisiertes Lineares Modell für Mytilus"
-#author: "Charlotte Schramm"
-#copyright: "Helmholtz-Zentrum Geesthacht, 2018"
-#date: "Aug 29, 2018"
-#license: This report is released  under the CC-by-SA 4.0 license.
+---
+title: "Generalisiertes Lineares Modell"
+author: "Charlotte Schramm"
+copyright: "Helmholtz-Zentrum Geesthacht, 2018"
+date: "Aug 29, 2018"
+output: html_document
+---
 
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>. When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
 
-#Lesen des SpatialPixelsDataFrame mit den Praediktoren
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Generalisierte Lineare Modelle
+
+Wir lesen den `SpatialPixelsDataFrame`, der in der Datei `mytilus_randomForest.Rmd` erzeugt wurde. Er enthält die Prädiktoren Korngröße als Phi (`val`), die Tiefe (`V3`) und die logarithmierte Tiefe (`logdepth`), bei der bereits alle Werte kleiner Null gleich Null gesetzt wurden. Phi und logarithmierte Tiefe werden geplottet
+
+```{r}
 depth_mgs_pixel <- readRDS("depth_mgs_pixel.rds")
 summary(depth_mgs_pixel)
-depth_plot <- spplot(depth_mgs_pixel,"logdepth",col.regions=blues9,at=seq(from=-9,to=9,by=18/9),main=list("Depth",cex=0.8))
-mgs_plot <- spplot(depth_mgs_pixel,"val",col.regions=terrain.colors(21)[1:20],
-                   at=seq(from=-4,to=4,by=8/20),main=list("Phi",cex=0.8))
+depth_plot <-spplot(depth_mgs_pixel,"logdepth",col.regions=blues9,at=seq(from=-9,to=9,by=18/9),
+                    main=list("log2 Depth",cex=0.8))
+mgs_plot <- spplot(depth_mgs_pixel,"val",col.regions=terrain.colors(21)[1:20],at=seq(from=-4,to=4,by=8/20),
+                   main=list("Phi",cex=0.8))
+library(gridExtra)
+grid.arrange(depth_plot,mgs_plot,ncol=2)
+```
+Dann wird der `SpatialPointsDataFrame` eingelesen, der Mytilus, Phi und Tiefendaten enthält. Es wird eine Extra-Spalte erzeugt, die die logarithmierten Daten enthält
+```{r}
 #Lesen des SpatialPointsDataFrame, der Mytilus, Tiefen und phi Daten enthält
 pointdata_Mytilus_depth_mgs <- readRDS("pointdata_Mytilus_depth_mgs.rds")
 pointdata_Mytilus_depth_mgs$logdepth <- log2(pointdata_Mytilus_depth_mgs$V3)
-
-#Funktion glm anwenden
-glm_quasibinomial_withlog <- glm(PA2~ val+logdepth,pointdata_Mytilus_depth_mgs,family="quasibinomial") #da Anteilsdaten?
+summary(pointdata_Mytilus_depth_mgs)
+```
+Das generalisierte lineare Modell wird angewandt mit verschiedenen Prädiktoren. Dabei wird eine quasibinomiale Verteilung der Responsevariable angenommen, die einen Freiheitsgrad mehr als die binomiale Verteilung hat.
+```{r}
+glm_quasibinomial_withlog <- glm(PA2~ val+logdepth,pointdata_Mytilus_depth_mgs,family="quasibinomial")
 glm_quasibinomial <- glm(PA2~ val+V3,pointdata_Mytilus_depth_mgs,family="quasibinomial")
 
 glm_quasibinomial_mgs <- glm(PA2~ val,pointdata_Mytilus_depth_mgs,family="quasibinomial") #nur phi als Prädiktor
-
-#Vorhersagen
+summary(glm_quasibinomial_withlog)
+summary(glm_quasibinomial)
+summary(glm_quasibinomial_mgs)
+```
+```{r}
+par(mfrow=c(2,2))
+plot(glm_quasibinomial_withlog)
+```
+Das GLM wenden wir nun auf die gesamte Fläche an mit der Funktion `predict.glm`. Ausgegeben werden numerische Werte, die allerdings keinen räumlichen Bezug mehr haben. Die vorhergesagten Werte müssen erst wieder mit Lon und Lat kombiniert werden. Das Ergebnis sind dann allerdings jeweils Punktdaten.
+```{r}
 predict_glm_2predictors_withlog <- predict.glm(glm_quasibinomial_withlog,depth_mgs_pixel,type="response")
 predict_glm_2predictors <- predict.glm(glm_quasibinomial,depth_mgs_pixel,type="response")
 predict_glm_1predictor <- predict.glm(object=glm_quasibinomial_mgs,newdata=depth_mgs_pixel,type="response")
@@ -55,6 +82,5 @@ predicted_2predictors_withlog_plot <- spplot(predicted_2predictors_withlog,"pred
 
 #Karten plotten
 library(gridExtra)
-predicted_1predictor_plot
 grid.arrange(predicted_1predictor_plot,predicted_2predictors_plot,predicted_2predictors_withlog_plot,ncol=3)
-
+```
