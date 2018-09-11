@@ -14,8 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 #Generalisierte Lineare Modelle
 
-Wir lesen den `SpatialPixelsDataFrame`, der in der Datei `mytilus_randomForest.Rmd` erzeugt wurde. Er enthält die Prädiktoren Korngröße als Phi (`val`), die Tiefe (`V3`) und die logarithmierte Tiefe (`logdepth`), bei der bereits alle Werte kleiner Null gleich Null gesetzt wurden. Phi und logarithmierte Tiefe werden geplottet
-
+Wir lesen den `SpatialPixelsDataFrame`, der in der Datei `mytilus_randomForest.Rmd` erzeugt wurde. Er enthält die Prädiktoren Korngröße als Phi (`val`), die Tiefe (`V3`) und die logarithmierte Tiefe (`logdepth`)??
 ```{r}
 depth_mgs_pixel <- readRDS("depth_mgs_pixel.rds")
 summary(depth_mgs_pixel)
@@ -43,10 +42,7 @@ summary(glm_quasibinomial_withlog)
 summary(glm_quasibinomial)
 summary(glm_quasibinomial_mgs)
 ```
-```{r}
-par(mfrow=c(2,2))
-plot(glm_quasibinomial_withlog)
-```
+
 Das GLM wenden wir nun auf die gesamte Fläche an mit der Funktion `predict.glm`. Ausgegeben werden numerische Werte, die allerdings keinen räumlichen Bezug mehr haben. Die vorhergesagten Werte müssen erst wieder mit Lon und Lat kombiniert werden. Das Ergebnis sind dann allerdings jeweils Punktdaten.
 ```{r}
 predict_glm_2predictors_withlog <- predict.glm(glm_quasibinomial_withlog,depth_mgs_pixel,type="response")

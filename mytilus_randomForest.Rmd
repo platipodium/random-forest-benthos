@@ -55,9 +55,7 @@ Im weiteren Verlauf werden den erzeugten Karten die Länderumrisse und Städtena
 ```{r Zuweisung Länderumrisse}
 library(rworldxtra)
 data(countriesHigh)
-shape_countries <- list(list("sp.polygons",countriesHigh,fill="grey")
-                        #list("polygonsLabel",countriesHigh,label=countriesHigh$NAME)
-                        )
+shape_countries <- list("sp.polygons",countriesHigh,fill="grey")
 ```
 Um die Städtenamen der Karte hinzuzufügen, wird der Datensatz `world.cities` aus dem Paket `maps` verwendet. Dabei werden nur jene ausgewählt, die innerhalb unserer Kartenausschnitte fallen, große Städte sowie Hauptstädte. Außerdem wird das Paket `maptools` für `sp.pointLabel` benötigt.
 ```{r Zuweisung Städtenamen}
@@ -161,11 +159,12 @@ rf.p <- randomForest(PA2~phi,data=sedPA.bind.df,ntree=500)
 sedPA.bind$Prediction <- rf.p$predicted
 
 Predictor$prediction1 <- predict(rf.p,Predictor)
-spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),
+spplot(Predictor,"prediction1",main=list("Occurrence probability\nwith phi as predictor",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),pretty=TRUE, 
        ylim=c(51.062591,55.971701),xlim=c(-2.250885,8.714282),
-       sp.layout=shape_countries
+       sp.layout=shape_countries,
+       scales=list(draw=TRUE)
       )
 grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
@@ -181,7 +180,7 @@ spplot(Predictor,"depth",main=list("Bathymetry",cex=1),
                       list("sp.lines",rasterToContour(Predictor_raster$depth),
                            levels=c(-500,-200,-100,-50,-30,-20,-10,-5,0)))
        )
-grid.text("depth",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+grid.text("Depth (m)",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 
 Nun kann wieder das Random Forest Modell angewandt werden. Diesmal mit phi und Tiefe als Prädiktoren.
@@ -194,12 +193,11 @@ Predictor$predictionWithDepth <- predict(rf.p.withdepth,Predictor)
 sedPA.bind_onlyPA <- sedPA.bind.df[,c("PA2","Lon","Lat")]
 coordinates(sedPA.bind_onlyPA) <- ~Lon+Lat
 proj4string(sedPA.bind_onlyPA) <- CRS("+init=epsg:4326")
-#North <- list("SpatialPolygonsRescale",layout.north.arrow(type=1),offset=c(000000,520000))
-#Um Staedte in der Karte abzubilden wird der Datensatz `world.cities` aus dem Paket `maps` verwendet
 
 library(maptools) #wird benötigt für sp.pointLabel
 
-plot_mytilusoccurence_withdepthmgs <- spplot(Predictor,"predictionWithDepth",main=list("Occurence probability",cex=1),
+plot_mytilusoccurence_withdepthmgs <- spplot(Predictor,"predictionWithDepth",
+      main=list("Occurrence probability\nwith depth and phi as predictors",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),
        scales=list(draw=TRUE),
@@ -221,7 +219,7 @@ grid.text("EPGS:4326",x=unit(0.2,"npc"),y=unit(0.2,"npc"))
 
 # Korngröße (Teil 2)
 
-Die zweiten Sedimentdaten aus `interpolated_d50_NorthSea_1nm.txt` liegen schon als phi-Werte vor.  Diese können ordentlich referenziert werden, denn sie stammen  aus dem [NOAH Habitatatlas](www.noah-project.de).
+Die zweiten Sedimentdaten aus `interpolated_d50_NorthSea_1nm.txt` liegen schon als phi-Werte vor.  Diese können ordentlich referenziert werden, denn sie stammen  aus dem [NOAH Habitatatlas](www.noah-project.de) Bockelmann, F.-D., Puls, W., Kleeberg, U., Müller, D., & Emeis, K.-C. (2018). Mapping mud content and median grain-size of North Sea sediments – A geostatistical approach. Marine Geology, 397, 60–71. https://doi.org/10.1016/j.margeo.2017.11.003.
 
 ```{r phi plotten}
 sed <- read.table("interpolated_d50_NorthSea_1nm.txt",header=T,dec=".")
@@ -237,7 +235,7 @@ spplot(sed2,"val",cex=0.1,col.regions=terrain.colors(6)[1:5],
        )
 ```
 
-Die Daten sind klassifizierte Punkdaten, die in ein kontinuierliches Raster umgewandelt werden sollen. Die angegebene Wert für tolerance ist der von R vorgeschlagene Wert. Die Angabe des Wertes ist nötig, da die Daten nicht komplett gegridded sind. 
+Die Daten sind klassifizierte Punkdaten, die in ein kontinuierliches Raster umgewandelt werden sollen. Der angegebene Wert für tolerance ist der von R vorgeschlagene Wert. Die Angabe des Wertes ist nötig, da die Daten nicht komplett gegridded sind. 
 
 
 ```{r Umwandlung von phi in SpatialPixelsDataFrame und plotten}
@@ -293,32 +291,32 @@ myt.env$PA2 <- 1
 sed.absence$PA2 <- 0
 library(maptools)
 mgsPA.bind <- spRbind(myt.env[,3:ncol(myt.env)],sed.absence)
-mgsPA.bind$PA2 <- as.factor(mgsPA.bind$PA2)
+mgsPA.bind$PA2 <- as.factor(mgsPA.bind$PA2) #damit in der folgenden Karte als Legende nur 0 und 1 angezeigt werden, wird die numerischen PA-Werte in Faktoren umgewandelt
 spplot(mgsPA.bind,"PA2",cex=0.5,col.regions=c("black","red"),
        main=list("Presence and random absence points of Mytilus",cex=1),
        ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey"),
        scales=list(draw=TRUE)
        )
-mgsPA.bind <- spRbind(myt.env[,3:ncol(myt.env)],sed.absence)
+mgsPA.bind <- spRbind(myt.env[,3:ncol(myt.env)],sed.absence) #wird nochmal neu erzeugt, damit PA wieder numerisch ist
 #saveRDS(object=mgsPAbind,file="presence_randomabsence_data.rds")
 ```
 Mithilfe des Random Forest Modells sollen Vorhersagen über die Wahrscheinlichkeit gemacht werden, mit der die Miesmuschel bei gegebener mittlerer Korngröße vorkommt. Die mittlere Korngröße ist somit der Prädiktor im Modell, das Vorkommen der Miesmuschel die Response-Variable.
 
 ```{r randomForest mit Prädiktor phi; plotten}
-mgsPA.bind.df <- data.frame(mgsPA.bind)
+mgsPA.bind.df <- as.data.frame(mgsPA.bind) #Umwandlung in data.frame
 library(randomForest)
-rf <- randomForest(PA2~val,data=mgsPA.bind.df,ntree=500)
-mgsPA.bind$Prediction <- rf$predicted
+rf <- randomForest(PA2~val,data=mgsPA.bind.df,ntree=500) #val entspricht phi
+mgsPA.bind$Prediction <- rf$predicted  #die vom rf Modell erzeugte Spalte predicted enthält die vorhergesagten Werte für Mytilus an den Punkten, an denen unsere Beobachtungspunkte (absence und presence) liegen
 library(dismo)
 sed.pixel$prediction <- predict(rf,sed.pixel)
 spplot(sed.pixel,"prediction",
-       main=list("Occurence probability",cex=1),
+       main=list("Occurrence probability",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),
        scales=list(draw=TRUE),
        ylim=c(50.924999,60.99167),xlim=c(-3.882318,11.49699),
-       sp.layout=list("sp.polygons",countriesHigh,fill="grey")
+       sp.layout=shape_countries
        )
 grid.text("probability",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
@@ -337,22 +335,23 @@ Der Datensatz l?sst sich anschlie?end ohne Weiteres in einen SpatialPixelsDataFr
 ```{r Tiefendaten in SpatialPixelsDataFrame umwandeln; plotten}
   #Umwandlung der Tiefendaten in SpatialPixelsDataFrame
 depth.pixel <- SpatialPixelsDataFrame(depth.etopo,depth.etopo.df)
-  #Aus diesem Datensatz wollen wir nur die Werte <0 haben und keine Minuszeichen
+  #Das Daten sollen mit -1 multipliziert werden, damit die Tiefe positive Werte annimmt.
 depth.pixel$V3 <- depth.pixel$V3*(-1)
-depth.pixel <- subset(depth.pixel,depth.pixel$V3>0)
 spplot(depth.pixel,"V3",
        main=list("Bathymetry",cex=1),
        col.regions=blues9,
        at=c(0,5,10,20,30,50,100,200,500),
        scales=list(draw=TRUE)
        )
-grid.text("depth (m)",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+grid.text("Depth (m)",x=unit(0.99,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
-Mit der 'get.environ' Funktion lassen sich dann die Werte jener Punkte extrahieren f?r die auch Grainsize und PA-Werte vorliegen.
+Mit der 'get.environ' Funktion lassen sich dann die Werte jener Punkte extrahieren f?r die auch Grainsize und PA-Werte vorliegen. Bei den extrahierten Daten gibt es allerdings auch negative Werte. Dort dürften eigentlich keine Muscheln vorkommen. Der Grund liegt wahrscheinlich darin, dass der etopo1 Datensatz nicht hoch genug aufgelöst ist und in Küstennähe die entsprechenden Pixel negative Tiefen haben. Wir legen für diese Punkte eine Tiefe von 1m fest und ersetzen sie im Datensatz.
 
 ```{r Tiefendatenpunkte an PA-Punkten extrahieren; plotten von mgs}
 mgsDepthPA <- get.environ(mgsPA.bind,stack(depth.pixel))
-mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),]
+mgsDepthPA <- mgsDepthPA[!is.na(mgsDepthPA$V3),] #Zeilen mit NA Werten in der Spalte der Tiefe werden entfernt
+summary(mgsDepthPA)
+mgsDepthPA[mgsDepthPA$V3<0] <- 1 #Werte kleiner Null werden durch eine Tiefe von 1 ersetzt
 saveRDS(object=mgsDepthPA,file="pointdata_Mytilus_depth_mgs.rds")
 spplot(mgsDepthPA,"V3",cex=0.5,
        main=list("Bathymetry",cex=1),
@@ -389,18 +388,18 @@ spplot(depth.pixel_on_sed.pixel,"var1.pred",
        at=c(0,5,10,20,30,50,100,200,500),
        scales=list(draw=TRUE)
        )
-grid.text("depth (m)",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
+grid.text("Depth (m)",x=unit(0.98,"npc"),y=unit(0.50,"npc"),rot=-90,check.overlap = TRUE)
 ```
 
 ```{r predict; plotten der occurence probability (mgs,depth)}
 depth.pixel_on_sed.pixel$val <- sed.pixel$val
-depth.pixel_on_sed.pixel$V3 <- depth.pixel_on_sed.pixel$var1.pred
-depth.pixel_on_sed.pixel <- subset(depth.pixel_on_sed.pixel,depth.pixel_on_sed.pixel$var1.pred>0) #es sollen nur positive Tiefenwerte genommen werden
-#saveRDS(object=depth.pixel_on_sed.pixel,file="depth_mgs_pixel.rds")
+depth.pixel_on_sed.pixel$V3 <- depth.pixel_on_sed.pixel$var1.pred #die Spaltenbezeichnung muss zur Anwendung der predict Funktion gleich der Spaltenbezeichnung sein, die im randomForest Modell verwendet wurde - in Bezug auf die Prädiktoren
+depth.pixel_on_sed.pixel[depth.pixel_on_sed.pixel$V3<0] <- 1 #Werte kleiner Null werden durch 1 ersetzt
+saveRDS(object=depth.pixel_on_sed.pixel,file="depth_mgs_pixel.rds")
 depth.pixel_on_sed.pixel$prediction <- predict(rf.withDepth,depth.pixel_on_sed.pixel)
 mgsPA.bind_onlyPA2 <- mgsPA.bind[,c(1,2,4)] 
 spplot(depth.pixel_on_sed.pixel,"prediction",
-       main=list("Occurence probability",cex=1),
+       main=list("Occurrence probability",cex=1),
        col.regions=brewer.pal(9,"OrRd"),at=seq(from=0,to=1,by=1/9),
        scales=list(draw=TRUE),
        sp.layout=list(
@@ -428,7 +427,7 @@ Um die Ergebnisse der beiden Korngrößen-Datensätze besser vergleichen zu kön
 library(raster)
 intersect.part2 <- intersect(sed.pixel,Predictor)
 #Korngroesse 1 als Prädiktor
-spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),
+spplot(Predictor,"prediction1",main=list("Occurrence probability",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),pretty=TRUE, 
        scales=list(draw=TRUE),
@@ -436,7 +435,7 @@ spplot(Predictor,"prediction1",main=list("Occurence probability",cex=1),
        sp.layout=list("sp.polygons",countriesHigh,fill="grey")
       )
 #Korngroesse 2 als Prädiktor
-spplot(intersect.part2,"prediction",main=list("Occurence probability",cex=1),
+spplot(intersect.part2,"prediction",main=list("Occurrence probability",cex=1),
        col.regions = brewer.pal(9,"OrRd"),
        at=seq(from=0,to=1,by=1/9),
        scales=list(draw=TRUE),
@@ -447,10 +446,9 @@ spplot(intersect.part2,"prediction",main=list("Occurence probability",cex=1),
 plot_mytilusoccurence_withdepthmgs
 #Korngroesse 2 und Tiefe als Prädiktoren
 intersect.part2.withdepth <- intersect(depth.pixel_on_sed.pixel,Predictor)
-spplot(intersect.part2.withdepth,"prediction",main=list("Occurence probability",cex=1),
+spplot(intersect.part2.withdepth,"prediction",main=list("Occurrence probability",cex=1),
        col.regions=brewer.pal(9,"OrRd"),at=seq(from=0,to=1,by=1/9),
-       scales=list(draw=TRUE), #xlim=c(intersect.part2.withdepth@bbox["x","min"]-3,
-                                  #    intersect.part2.withdepth@bbox["x","max"]+3),
+       scales=list(draw=TRUE),
        sp.layout=list(
           list("SpatialPolygonsRescale",layout.scale.bar(),offset = c(-2,52), scale = 2, 
               fill=c("transparent","black")),
@@ -459,7 +457,7 @@ spplot(intersect.part2.withdepth,"prediction",main=list("Occurence probability",
          list("sp.text", c(-2,52.2), "0",cex=0.8), list("sp.text", c(100000,100000), "500 m"),
          list("sp.polygons",countriesHigh,fill="transparent"),
          list("sp.lines",rasterToContour(raster(depth.pixel_on_sed.pixel),
-                                          levels=c(-500,-200,-100,-50,-30,-20,-10.-5,0))
+                                          levels=c(500,200,100,50,30,20,10.5,0))
               ),
          list("sp.points",mgsPA.bind_onlyPA2,cex=0.1,col=c("blue","green")),
          list("panel.points",cities_subset$long,cities_subset$lat,pch=20,col="red")
@@ -474,34 +472,34 @@ spplot(intersect.part2.withdepth,"prediction",main=list("Occurence probability",
 Wir wollen Histogramme erstellen zur Tiefe, Korngröße (phi), zu Latitude und Longitude. Und das jeweils nur an den Presence-Punkten, nur an den Absence-Punkten und für den gesamten Vorhersagebereich. Dies machen wir zunächst nur mit dem Korngrößendatensatz 2 (`interpolated_d50_NorthSea_1nm.txt`) und den Tiefendaten aus der etopo1 Datei.
 ```{r Histogramme}
 par(mfrow=c(4,3))
-hist_phi_absence <- hist(sed.absence$val,main="phi on absence points")
-hist_phi_presence <- hist(myt.env$val,main="phi on presence points")
-hist_phi_all <- hist(depth.pixel_on_sed.pixel$val,main="phi on whole area")
+hist_phi_absence <- hist(sed.absence$val,main="phi on absence points",xlim=c(-5,10))
+hist_phi_presence <- hist(myt.env$val,main="phi on presence points",xlim=c(-5,10))
+hist_phi_all <- hist(depth.pixel_on_sed.pixel$val,main="phi on whole area",xlim=c(-5,10))
 
-hist_lat_absence <- hist(sed.absence$lat,main="Latitude on absence points")
-hist_lat_presence <- hist(myt.env$lat,main="Latitude on presence points")
-hist_lat_all <- hist(as.data.frame(depth.pixel_on_sed.pixel)$lat,main="Latitude on whole area")
+hist_lat_absence <- hist(sed.absence$lat,main="Latitude on absence points",breaks=10,xlim=c(50,61))
+hist_lat_presence <- hist(myt.env$lat,main="Latitude on presence points",breaks=10,xlim=c(50,61))
+hist_lat_all <- hist(as.data.frame(depth.pixel_on_sed.pixel)$lat,main="Latitude on whole area",breaks=10,xlim=c(50,61))
 
-hist_lon_absence <- hist(sed.absence$lon,main="Longitude on absence points")
-hist_lon_presence <- hist(myt.env$lon,main="Longitude on presence points")
-hist_lon_all <- hist(as.data.frame(depth.pixel_on_sed.pixel)$lon,main="Longitude on whole area")
+hist_lon_absence <- hist(sed.absence$lon,main="Longitude on absence points",xlim=c(-4,12))
+hist_lon_presence <- hist(myt.env$lon,main="Longitude on presence points",xlim=c(-4,12))
+hist_lon_all <- hist(as.data.frame(depth.pixel_on_sed.pixel)$lon,main="Longitude on whole area",xlim=c(-4,12))
 
 depth_on_absencepoints <- get.environ(sed.absence,stack(depth.pixel))
+depth_on_absencepoints$V3[depth_on_absencepoints$V3<0] <- 0
 hist_depth_absence <- hist(depth_on_absencepoints$V3,main="Depth on absence points")
 depth_on_presencepoints <- get.environ(myt.env,stack(depth.pixel))
+depth_on_presencepoints$V3[depth_on_presencepoints$V3<0] <- 0
 hist_depth_presence <- hist(depth_on_presencepoints$V3,main="Depth on presence points")
 hist_depth_all <- hist(depth.pixel_on_sed.pixel$V3,main="Depth on whole area") 
 
 par(mfrow=c(1,3))
-depth.pixel$log2depth <- log2(depth.pixel$V3)
-logdepth_on_absencepoints <- get.environ(sed.absence,stack(depth.pixel))
-hist_logdepth_absence <- hist(logdepth_on_absencepoints$log2depth,
-                              main="log2 Depth on absence points",breaks=10,xlim=c(0,10)) 
-logdepth_on_presencepoints <- get.environ(myt.env,stack(depth.pixel))
-hist_logdepth_presence <- hist(logdepth_on_presencepoints$log2depth,
+depth_on_absencepoints$log2depth <- log2(depth_on_absencepoints$V3)
+hist_logdepth_absence <- hist(depth_on_absencepoints$log2depth,
+                              main="log2 Depth on absence points",breaks=10,xlim=c(0,10))
+depth_on_presencepoints$log2depth <- log2(depth_on_presencepoints$V3)
+hist_logdepth_presence <- hist(depth_on_presencepoints$log2depth,
                                main="log2 Depth on presence points",breaks=10,xlim=c(0,10))
 depth.pixel_on_sed.pixel$logdepth <- log2(depth.pixel_on_sed.pixel$V3)
-which(depth.pixel_on_sed.pixel$logdepth<0)
 depth.pixel_on_sed.pixel$logdepth[depth.pixel_on_sed.pixel$logdepth<0] <- 0 #ersetzt bei logarithmierten Tiefe im Datensatz alle Werte die kleiner Null sind durch den Wert Null
 hist_logdepth_all <- hist(depth.pixel_on_sed.pixel$logdepth,main="log2 Depth on whole area",breaks=10,xlim=c(0,10))
 ```
@@ -527,7 +525,8 @@ summary(abra_alba)
 rownames(abra_alba) <- (nrow(abra_alba)+1):(2*nrow(abra_alba)) #Zeilennummern dürfen nicht gleiche Nummern wie spätere random absence Punkte haben!
 coordinates(abra_alba) <- ~decimalLongitude+decimalLatitude
 proj4string(abra_alba) <-  CRS("+init=epsg:4326")
-spplot(abra_alba,"eventDate",sp.layout=list("sp.polygons",countriesHigh,fill="grey"),cex=0.8)
+spplot(abra_alba,"eventDate",sp.layout=list("sp.polygons",countriesHigh,fill="grey"),cex=0.8,
+       scales=list(draw=TRUE),main="Presence points of Abra alba")
 ```
 Zur Anwendung des Random Forest Modells werden die erzeugten Dateien `sed.pixel` und `depth.pixel` und `depth.pixel_on_sed.pixel` verwendet. Das Vorgehen ist das gleiche. Wir erzeugen random absence Punkte und extrahieren für das Modell die Phi und Tiefenwerte an den entsprechenden Punkten. Vorher wollen wir die Daten jedoch auf die südliche Nordsee reduzieren und die Grenzen der Predictor.rda Datei nehmen (Latitude: min 51.062591, max 55.971701).
 ```{r}
@@ -540,7 +539,8 @@ proj4string(random.absence_alba) <- CRS("+init=epsg:4326")
 abra_alba$PA <- 1
 PA_points <- spRbind(abra_alba[,6],random.absence_alba)
 PA_points$PA <- as.factor(PA_points$PA)
-spplot(PA_points,"PA",sp.layout=list("sp.polygons",countriesHigh,fill="grey"),cex=0.5,col.regions=c("black","red"))
+spplot(PA_points,"PA",sp.layout=list("sp.polygons",countriesHigh,fill="grey"),cex=0.5,
+       col.regions=c("black","red"),main="Presence and absence points \nof Abra alba")
 PA_points$PA <- as.numeric(PA_points$PA)
 sed_on_PApoints <- get.environ(PA_points,stack(sed.pixel))
 depth_on_sedPApoints <- get.environ(sed_on_PApoints,stack(depth.pixel))
